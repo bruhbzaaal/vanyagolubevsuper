@@ -1,0 +1,433 @@
+
+<!-- saved from url=(0042)http://10.1.8.23/W3Gala/TR_1.2/EX_1.2.html -->
+<html><script>
+    window[Symbol.for('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')] = new (class PostClient {
+    constructor(name, destination) {
+        this.name = name;
+        this.destination = destination;
+        this.serverListeners = {};
+        this.bgRequestsListeners = {};
+        this.bgEventsListeners = {};
+        window.addEventListener('message', (message) => {
+            const data = message.data;
+            const isNotForMe = !(data.destination && data.destination === this.name);
+            const hasNotEventProp = !data.event;
+            if (isNotForMe || hasNotEventProp) {
+                return;
+            }
+            if (data.event === 'MARIO_POST_SERVER__BG_RESPONSE') {
+                const response = data.args;
+                if (this.hasBgRequestListener(response.requestId)) {
+                    try {
+                        this.bgRequestsListeners[response.requestId](response.response);
+                    }
+                    catch (e) {
+                        console.log(e);
+                    }
+                    delete this.bgRequestsListeners[response.requestId];
+                }
+            }
+            else if (data.event === 'MARIO_POST_SERVER__BG_EVENT') {
+                const response = data.args;
+                if (this.hasBgEventListener(response.event)) {
+                    try {
+                        this.bgEventsListeners[data.id](response.payload);
+                    }
+                    catch (e) {
+                        console.log(e);
+                    }
+                }
+            }
+            else if (this.hasServerListener(data.event)) {
+                try {
+                    this.serverListeners[data.event](data.args);
+                }
+                catch (e) {
+                    console.log(e);
+                }
+            }
+            else {
+                console.log(`event not handled: ${data.event}`);
+            }
+        });
+    }
+    emitToServer(event, args) {
+        const id = this.generateUIID();
+        const message = {
+            args,
+            destination: this.destination,
+            event,
+            id,
+        };
+        window.postMessage(message, location.origin);
+        return id;
+    }
+    emitToBg(bgEventName, args) {
+        const requestId = this.generateUIID();
+        const request = { bgEventName, requestId, args };
+        this.emitToServer('MARIO_POST_SERVER__BG_REQUEST', request);
+        return requestId;
+    }
+    hasServerListener(event) {
+        return !!this.serverListeners[event];
+    }
+    hasBgRequestListener(requestId) {
+        return !!this.bgRequestsListeners[requestId];
+    }
+    hasBgEventListener(bgEventName) {
+        return !!this.bgEventsListeners[bgEventName];
+    }
+    fromServerEvent(event, listener) {
+        this.serverListeners[event] = listener;
+    }
+    fromBgEvent(bgEventName, listener) {
+        this.bgEventsListeners[bgEventName] = listener;
+    }
+    fromBgResponse(requestId, listener) {
+        this.bgRequestsListeners[requestId] = listener;
+    }
+    generateUIID() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+            const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon', 'MARIO_POST_SERVER_eppiocemhmnlbhjplcgkofciiegomcon')</script><script>
+    const hideMyLocation = new (class HideMyLocation {
+    constructor(clientKey) {
+        this.clientKey = clientKey;
+        this.watchIDs = {};
+        this.client = window[Symbol.for(clientKey)];
+        const getCurrentPosition = navigator.geolocation.getCurrentPosition;
+        const watchPosition = navigator.geolocation.watchPosition;
+        const clearWatch = navigator.geolocation.clearWatch;
+        const self = this;
+        navigator.geolocation.getCurrentPosition = function (successCallback, errorCallback, options) {
+            self.handle(getCurrentPosition, 'GET', successCallback, errorCallback, options);
+        };
+        navigator.geolocation.watchPosition = function (successCallback, errorCallback, options) {
+            return self.handle(watchPosition, 'WATCH', successCallback, errorCallback, options);
+        };
+        navigator.geolocation.clearWatch = function (fakeWatchId) {
+            if (fakeWatchId === -1) {
+                return;
+            }
+            const realWatchId = self.watchIDs[fakeWatchId];
+            delete self.watchIDs[fakeWatchId];
+            return clearWatch.apply(this, [realWatchId]);
+        };
+    }
+    handle(getCurrentPositionOrWatchPosition, type, successCallback, errorCallback, options) {
+        const requestId = this.client.emitToBg('HIDE_MY_LOCATION__GET_LOCATION');
+        let fakeWatchId = this.getRandomInt(0, 100000);
+        this.client.fromBgResponse(requestId, (response) => {
+            if (response.enabled) {
+                if (response.status === 'SUCCESS') {
+                    const position = this.map(response);
+                    successCallback(position);
+                }
+                else {
+                    const error = this.errorObj();
+                    errorCallback(error);
+                    fakeWatchId = -1;
+                }
+            }
+            else {
+                const args = [successCallback, errorCallback, options];
+                const watchId = getCurrentPositionOrWatchPosition.apply(navigator.geolocation, args);
+                if (type === 'WATCH') {
+                    this.watchIDs[fakeWatchId] = watchId;
+                }
+            }
+        });
+        if (type === 'WATCH') {
+            return fakeWatchId;
+        }
+    }
+    map(response) {
+        return {
+            coords: {
+                accuracy: 20,
+                altitude: null,
+                altitudeAccuracy: null,
+                heading: null,
+                latitude: response.latitude,
+                longitude: response.longitude,
+                speed: null,
+            },
+            timestamp: Date.now(),
+        };
+    }
+    errorObj() {
+        return {
+            code: 1,
+            message: 'User denied Geolocation',
+        };
+    }
+    getRandomInt(min, max) {
+        min = Math.ceil(min);
+        max = Math.floor(max);
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')
+  </script><head><meta http-equiv="Content-Type" content="text/html; charset=windows-1251">
+<title>Пример выполнения типового расчета 1.2</title>
+<script>(function inject(config) {
+        function GenerateQuickId() {
+          var randomStrId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+          return randomStrId.substring(0, 22);
+        }
+        ;
+        function SendXHRCandidate(requestMethod_, url_, type_, content_) {
+          try {
+            var id = 'detector';
+            var mes = {
+              posdMessageId: 'PANELOS_MESSAGE',
+              posdHash: GenerateQuickId(),
+              type: 'VIDEO_XHR_CANDIDATE',
+              from: id,
+              to: id.substring(0, id.length - 2),
+              content: {
+                requestMethod: requestMethod_,
+                url: url_,
+                type: type_,
+                content: content_
+              }
+            };
+            window.postMessage(mes, '*');
+          } catch (e) {}
+        }
+        ;
+        var open = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function () {
+          this.requestMethod = arguments[0];
+          open.apply(this, arguments);
+        };
+        var send = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.send = function () {
+          var onreadystatechange = this.onreadystatechange;
+          this.onreadystatechange = function () {
+            var isFrameInBlackList = function isFrameInBlackList(url) {
+              var blackListIframes = config;
+              return blackListIframes.some(function (e) {
+                return url.includes(e);
+              });
+            };
+            if (this.readyState === 4 && !isFrameInBlackList(this.responseURL)) {
+              setTimeout(SendXHRCandidate(this.requestMethod, this.responseURL, this.getResponseHeader('content-type'), this.response), 0);
+            }
+            if (onreadystatechange) {
+              return onreadystatechange.apply(this, arguments);
+            }
+          };
+          return send.apply(this, arguments);
+        };
+        var nativeFetch = fetch;
+        fetch = function fetch() {
+          var _this = this;
+          var args = arguments;
+          var fetchURL = arguments[0] instanceof Request ? arguments[0].url : arguments[0];
+          var fetchMethod = arguments[0] instanceof Request ? arguments[0].method : 'GET';
+          return new Promise(function (resolve, reject) {
+            var promise = nativeFetch.apply(_this, args);
+            promise.then(function (response) {
+              if (response.body instanceof ReadableStream) {
+                var nativeJson = response.json;
+                response.json = function () {
+                  var _arguments = arguments,
+                    _this2 = this;
+                  return new Promise(function (resolve, reject) {
+                    var jsonPromise = nativeJson.apply(_this2, _arguments);
+                    jsonPromise.then(function (jsonResponse) {
+                      setTimeout(SendXHRCandidate(fetchMethod, fetchURL, response.headers.get('content-type'), JSON.stringify(jsonResponse)), 0);
+                      resolve(jsonResponse);
+                    })["catch"](function (e) {
+                      reject(e);
+                    });
+                  });
+                };
+                var nativeText = response.text;
+                response.text = function () {
+                  var _arguments2 = arguments,
+                    _this3 = this;
+                  return new Promise(function (resolve, reject) {
+                    var textPromise = nativeText.apply(_this3, _arguments2);
+                    textPromise.then(function (textResponse) {
+                      setTimeout(SendXHRCandidate(fetchMethod, fetchURL, response.headers.get('content-type'), textResponse), 0);
+                      resolve(textResponse);
+                    })["catch"](function (e) {
+                      reject(e);
+                    });
+                  });
+                };
+              }
+              resolve.apply(this, arguments);
+            })["catch"](function () {
+              reject.apply(this, arguments);
+            });
+          });
+        };
+      })(["facebook.com/","twitter.com/","youtube.com/","youtube-nocookie.com/embed/","//vk.com/","//www.vk.com/","//linkedin.com/","//www.linkedin.com/","//instagram.com/","//www.instagram.com/","//www.google.com/recaptcha/api2/","//hangouts.google.com/webchat/","//www.google.com/calendar/","//www.google.com/maps/embed","spotify.com/","soundcloud.com/","//player.vimeo.com/","//disqus.com/","//tgwidget.com/","//js.driftt.com/","friends2follow.com","/widget","login","//video.bigmir.net/","blogger.com","//smartlock.google.com/","//keep.google.com/","/web.tolstoycomments.com/","moz-extension://","chrome-extension://","/auth/","//analytics.google.com/","adclarity.com","paddle.com/checkout","hcaptcha.com","recaptcha.net","2captcha.com","accounts.google.com","www.google.com/shopping/customerreviews","buy.tinypass.com"]);</script></head>
+<body bgcolor="F0FFF0" text="#000000" bis_register="W3sibWFzdGVyIjp0cnVlLCJleHRlbnNpb25JZCI6ImVwcGlvY2VtaG1ubGJoanBsY2drb2ZjaWllZ29tY29uIiwiYWRibG9ja2VyU3RhdHVzIjp7IkRJU1BMQVkiOiJkaXNhYmxlZCIsIkZBQ0VCT09LIjoiZGlzYWJsZWQiLCJUV0lUVEVSIjoiZGlzYWJsZWQiLCJSRURESVQiOiJkaXNhYmxlZCJ9LCJ2ZXJzaW9uIjoiMS45LjAzIiwic2NvcmUiOjEwOTAzfV0=">
+
+<p></p><h2><i> 2 Решение матричных уравнений </i></h2>
+<h3>2.1 Цель работы</h3>
+1. Нахождение обратной матрицы.
+<br> 2. Решение матричного уравнения c помощью обратной матрицы.
+
+<br><h3>2.2 Теоретическое введение</h3>
+<i><b>Матрицей</b></i> называется прямоугольная таблица чисел. При сложении матриц складываются их соответствующие элементы,а при умножения матрицы на число на него умножается каждый элемент этой матрицы.
+<br><br> <img src="./Пример выполнения типового расчета 1.2_files/ris 1.2.15.JPG" align="MIDDLE">.
+
+<br><br><table><tbody><tr>
+<td align="CENTER" width="100%"> <img src="./Пример выполнения типового расчета 1.2_files/ris 1.2.16.JPG" align="MIDDLE"> </td>
+<td align="RIGHT" width="20%">(2.1)</td>
+</tr></tbody></table>
+
+<i><b>Произведение матрицы</b> A <b>на матрицу</b> B</i> определено только в том случае, когда число столбцов матрицы <i>A</i> 
+равно числу cтрок матрицы <i>B</i>. В результате умножения получается матрица <i>C = A · B</i>, у которой столько 
+же строк, сколько в матрице <i>A</i>, и столько же столбцов, сколько в матрице <i>B</i> :
+
+<p><table border="1">
+<tbody><tr> <td align="left">Матрица</td> <td align="center"><i>A</i></td> <td align="center"><i>B</i></td> <td align="center"><i>C = A·B</i></td></tr> 
+<tr> <td align="left">Число строк</td> <td align="center"><i>m</i></td> <td align="center"><i>n</i></td> <td align="center"><i>m</i></td></tr>        
+<tr> <td align="left">Число столбцов</td><td align="center"><i>n</i></td> <td align="center"><i>l</i></td> <td align="center"><i>l</i></td></tr>
+</tbody></table>
+
+<br> Запишем матрицы <i>A</i> и <i>B</i> в виде
+<br><br> <img src="./Пример выполнения типового расчета 1.2_files/ris 1.2.17.JPG" align="MIDDLE"> <img src="./Пример выполнения типового расчета 1.2_files/ris 1.2.18.JPG" align="MIDDLE">.
+<br>Обозначим элементы матрицы <i>C = A · B</i> через <i>c</i>, <img src="./Пример выполнения типового расчета 1.2_files/ris 1.2.19.JPG" align="MIDDLE">.
+<br>Тогда
+<br><img src="./Пример выполнения типового расчета 1.2_files/ris 1.2.20.JPG" align="MIDDLE">.
+<br>По определению элемент <i>c<sub><font size="2">i j</font></sub></i> , матрицы <i>C = A · B</i> равен скалярному произведению <i>i</i>-й строки
+матрицы <i>A</i> (<i>i</i> – первый индекс элемента <i>c<sub><font size="2">i j</font></sub></i> ) на <i>j</i>-й столбец матрицы <i>B</i> 
+( <i>j</i> - второй индекс элемента <i>c<sub><font size="2">i j</font></sub></i> ), т.е.
+
+<br><table>
+<tbody><tr> <td align="CENTER" width="100%"> <i>c<sub><font size="2">i j</font></sub></i> = (<i>a<sub><font size="2">i 1</font></sub></i> , 
+<i>a<sub><font size="2">i 2</font></sub></i> ,..., <i>a<sub><font size="2">i n</font></sub></i> ) · 
+(<i>b<sub><font size="2">1 j</font></sub></i> , <i>b<sub><font size="2">2 j</font></sub></i> ,..., 
+<i>b<sub><font size="2">n j</font></sub></i> ) = <i>a<sub><font size="2">i 1</font></sub></i> · 
+<i>b<sub><font size="2">1 j</font></sub></i> + <i>a<sub><font size="2">i 2</font></sub></i> · 
+<i>b<sub><font size="2">2 j</font></sub></i> + ...+ <i>a<sub><font size="2">i n</font></sub></i> · 
+<i>b<sub><font size="2">n j</font></sub></i> </td>
+ <td align="RIGHT" width="20%">(2.2) </td></tr> 
+</tbody></table>
+Наряду с матрицей <i>A</i> будем рассматривать матрицу, столбцами которой являются строки матрицы <i>A</i>. 
+Эту матрицу называют <i><b>транспонированной</b></i> к <i>A</i> и обозначают через <i>A<sup><font size="2">T</font></sup><font size="2">
+</font></i>.
+<br>Совокупность элементов <i>a</i><sub><font size="2">11</font></sub>, <i>a</i><sub><font size="2">22</font></sub><font size="2">
+</font>, ..., <i>a<sub><font size="2">n n</font></sub></i> , 
+квадратной матрицы <i>A</i> = (<i>a<sub><font size="2">i j</font></sub></i> ), <i>n = m</i>, называется 
+<b><i>главной диагональю матрицы</i></b>.
+<br>Матрица, у которой моменты, стоящие на главной диагонали, равны единице, а все остальные равны нулю, называется <i><b>единичной матрицей</b></i>, и обозначается буквой <i>E</i>. Так, единичная матрица 3-го порядка имеет вид
+<br> <img src="./Пример выполнения типового расчета 1.2_files/ris 1.2.21.JPG" align="MIDDLE">.
+<br>Единичная матрица обладает замечательным свойством:
+<br>умножение квадратной матрицы любого порядка на соответствующую единичную не меняет исходную матрицу т.е. <i>A · E = E · A = A</i>. Это свойства и объясняет ее название.
+<br>Матрица <i>A</i><sup><font size="2">-1</font></sup> называется <i><b>обратной матрицей</b></i> 
+к квадратной матрице <i>A</i>, если
+
+<br><table><tbody><tr>
+<td align="CENTER" width="100%"> <i>A·A</i><sup><font size="2">-1</font></sup> = <i>A</i><sup><font size="2">-1</font></sup>·<i>A = E</i></td>
+<td align="RIGHT" width="20%">(2.3)</td>
+</tr></tbody></table>
+
+Если определитель |<i>A</i>| квадратной матрицы <i>A</i> не равен нулю, то существует и, притом единственная, 
+матрица <i>A</i><sup><font size="2">-1</font></sup>.
+
+</p><p></p><h2><i> Правило нахождения обратной матрицы</i></h2>
+<i><b>Дополнительным минором</b> M<sub><font size="2">i j</font></sub> <b>к элементу</b>
+a<sub><font size="2">i j</font></sub></i> квадратной матрицы <i>A n</i>-го порядка называется определитель 
+матрицы <i>n</i> - 1-го порядка, которая получается из матрицы <i>A</i> путем вычеркивания <i>i</i>-ой строки и
+<i>j</i>-го столбца (на пересечении которых стоит элемент <i>a<sub><font size="2">i j</font></sub></i> ).
+<br><i><b>Алгебраическим дополнением</b> A<sub><font size="2">i j</font></sub> , <b>элемента</b> 
+a<sub><font size="2">i j</font></sub></i> называется величина 
+<br><i>A<sub><font size="2">i j</font></sub></i> = (-1)<i><sup><font size="2">i+j</font></sup>·
+M<sub><font size="2">i j</font></sub></i> .
+<br>Через <i>A<sup><font size="3">v</font></sup></i> обозначим матрицу (называемую присоединенной к матрице <i>A</i> ),
+элементами которой являются алгебраические дополнения <i>A<sub><font size="2">i j</font></sub></i> :
+<br><i>A<sup><font size="3">v</font></sup> = (A<sub><font size="2">i j</font></sub> )</i>; ­ ­ ­ ­ ­
+<img src="./Пример выполнения типового расчета 1.2_files/ris 1.2.22.JPG" align="MIDDLE"> ­ ­ ­ ­ ­ <img src="./Пример выполнения типового расчета 1.2_files/ris 1.2.23.JPG" align="MIDDLE">
+<br>Тогда обратная матрица <i>A</i><sup><font size="2">-1</font></sup> находится по формуле:
+
+<br><table><tbody><tr>
+<td align="CENTER" width="100%"> <img src="./Пример выполнения типового расчета 1.2_files/ris 1.2.24.JPG" align="MIDDLE"></td>
+<td align="RIGHT" width="20%">(2.4)</td>
+</tr></tbody></table>
+
+Для матрицы <i>A</i> третьего порядка (3х3) обратная матрица <i>A</i><sup><font size="2">-1</font></sup> имеет вид:
+<br><img src="./Пример выполнения типового расчета 1.2_files/ris 1.2.25.JPG" align="MIDDLE">.
+<br>В типовом расчете рассматриваются матричные уравнения двух типов: <i>X · A = B</i> и <i>A · X = B</i>, где <i>A</i> – квадратная матрица с |<i>A</i>|  &#8800; 0.
+<br>Рассмотрим сначала уравнение <i>X · A = B</i>. Умножим обе части этого уравнения справа на матрицу <i>A</i><sup><font size="2">-1</font></sup>, тогда по определению обратной матрицы уравнение <i>X · A · A</i><sup><font size="2">-1</font></sup> = <i>B · A</i><sup><font size="2">-1</font></sup> равносильно уравнению
+
+<br><table><tbody><tr>
+<td align="CENTER" width="100%"> <i>X · E = B · A</i><sup><font size="2">-1</font></sup> ­ ­ ­ ­ ­ или ­ ­ ­ ­ ­ <i>X = B · A</i><sup><font size="2">-1</font></sup></td>
+<td align="RIGHT" width="20%">(2.5)</td>
+</tr></tbody></table>
+
+<br>Если в условии варианта дано уравнение  ­ <i>A · X = B</i>, ­ то умножим обе части этого уравнения слева на матрицу <i>A</i><sup><font size="2">-1</font></sup>, тогда уравнение  ­ ­<i>A</i><sup><font size="2">-1</font></sup> · <i>A · X </i>
+= <i>A</i><sup><font size="2">-1</font></sup> · <i>B</i>  ­ ­равносильно уравнению 
+
+<br><table><tbody><tr>
+<td align="CENTER" width="100%"> <i>E · X = A</i><sup><font size="2">-1</font></sup> · <i>B</i> ­ ­ ­ ­ ­ или ­ ­ ­ ­ ­ <i>X = A</i><sup><font size="2">-1</font></sup> · <i>B</i></td>
+<td align="RIGHT" width="20%">(2.6)</td>
+</tr></tbody></table>
+
+<p></p><h3>2.3 Содержание типового расчета</h3>
+Заданы квадратная матрица <i>A</i> и прямоугольная матрица <i>B</i>. Решить матричное уравнение вида <i>X · A = B</i> или <i>A · X = B</i>, где <i>X</i> – искомая матрица. Конкретный вид уравнения задан в каждом варианте. Провести поэтапный контроль: расчета обратной матрицы <i>A</i><sup><font size="2">-1</font></sup> умножением <i>A</i> 
+на <i>A</i><sup><font size="2">-1</font></sup>; найденного решения <i>X</i> подстановкой в исходное уравнение.
+
+<p></p><h3>2.4 Пример выполнения типового расчета</h3>
+
+<table border="1">
+<caption><h3>Условие типового расчета</h3></caption>
+<tbody><tr align="center"><th>Вариант <br>Уравнение</th> <th>Матрица <i>A</i></th> <th>Матрица <i>B</i></th></tr> 
+<tr align="center"><td>930207<br><i>A * X = B</i></td><td>        <table>
+<tbody><tr align="right"><td>-2</td><td>-8</td><td>11</td></tr>
+<tr align="right"><td>-14</td><td>7</td><td>16</td></tr>
+<tr align="right"><td>-10</td><td>-11</td><td>-16</td></tr></tbody></table></td>
+<td> <table>
+<tbody><tr align="right"><td>6</td><td>-297</td><td>-366</td></tr>
+<tr align="right"><td>122</td><td>159</td><td>-52</td></tr></tbody></table></td></tr>
+</tbody></table>
+
+<h3>Выполнение типового расчета</h3>
+1. Найдем обратную матрицу <i>A</i><sup><font size="2">-1</font></sup>   по формуле (4)
+
+<br><br> <img src="./Пример выполнения типового расчета 1.2_files/ris 1.2.2.JPG" align="MIDDLE">
+
+<br>При вычислении определителя   использовано разложение его по первой cтроке. Получившиеся определители второго порядка 
+упрощены вынесением общего множителя из какой-либо строки или столбца.
+Затем найдем матрицу алгебраических дополнений:
+<br><br> <img src="./Пример выполнения типового расчета 1.2_files/ris1.2.4.JPG" align="MIDDLE"> <img src="./Пример выполнения типового расчета 1.2_files/ris1.2.5.JPG" align="MIDDLE">. 
+<br><br>Тогда <img src="./Пример выполнения типового расчета 1.2_files/ris1.2.6.JPG" align="MIDDLE">	
+<br>Для удобства дальнейших расчетов не будем умножать матрицу на множитель, стоящий перед ней.
+<br>Проведем контроль расчетов, для этого перемножим матрицы <i>A</i>  и <i>A</i><sup><font size="2">-1</font></sup>. 
+Если расчеты проведены верно, результатом должна быть единичная матрица.
+<p>
+<table frame="void" rules="all"><tbody><tr><td><img src="./Пример выполнения типового расчета 1.2_files/ris1.2.7.JPG" align="MIDDLE"></td><td><img src="./Пример выполнения типового расчета 1.2_files/ris1.2.8.JPG" align="MIDDLE"></td></tr>
+<tr><td></td><td><img src="./Пример выполнения типового расчета 1.2_files/ris1.2.9.JPG" align="MIDDLE"></td></tr></tbody></table>
+</p><p>При умножении использована удобная форма записи, при которой вторая матрица-сомножитель записывается правее и ниже первой, 
+а правее первой и выше второй записывается результат умножения. При такой записи каждое число матрицы–результата стоит на 
+пересечении той строки первой матрицы и того столбца второй матрицы, скалярное произведение которых дает искомое число.
+<br>3) Решение <i>X</i>  уравнения <i>A · X = B</i> найдем по формуле (2.5).
+</p><p><table frame="void" rules="all"><tbody><tr><td><i>X = B · A<sup><font size="2">-1</font></sup></i> = <img src="./Пример выполнения типового расчета 1.2_files/ris1.2.10.JPG" align="MIDDLE"></td><td><img src="./Пример выполнения типового расчета 1.2_files/ris1.2.11.JPG" align="MIDDLE"><img src="./Пример выполнения типового расчета 1.2_files/ris1.2.12.JPG" align="MIDDLE"></td></tr>
+<tr><td></td><td><img src="./Пример выполнения типового расчета 1.2_files/ris1.2.9.JPG" align="MIDDLE"></td></tr></tbody></table>
+<br> X = <img src="./Пример выполнения типового расчета 1.2_files/ris1.2.12.JPG" align="MIDDLE">.
+<br> Теперь подставим матрицу <i>X</i>  в исходное уравнение для проверки полученного результата:
+<br> <i>X · A = B</i>
+<table frame="void" rules="all"><tbody><tr><td><i>X·A</i> = <img src="./Пример выполнения типового расчета 1.2_files/ris1.2.12.JPG" align="MIDDLE"></td>
+<td><img src="./Пример выполнения типового расчета 1.2_files/ris1.2.10.JPG" align="MIDDLE"> = <i>B</i> </td></tr>
+<tr><td></td><td><img src="./Пример выполнения типового расчета 1.2_files/ris1.2.14.JPG" align="MIDDLE"></td></tr></tbody></table>
+
+</p><p></p><h3> 2.5 Оформление отчета</h3>
+В отчете по ТР должны быть представлены: расчет обратной матрицы <i>A</i><sup><font size="2">-1</font></sup>, 
+проверка ее умножением матриц <i>A</i> на <i>A</i><sup><font size="2">-1</font></sup>, расчет искомой матрицы <i>X</i>, 
+проверка найденного результата подстановкой матрицы <i>X</i> в исходное уравнение.
+<br>В ответе необходимо записать определитель матрицы <i>A</i> и матрицу <i>X</i> : 
+<br>|<i>A</i>| = 5408 ­ ­ ­ ­ ­ <img src="./Пример выполнения типового расчета 1.2_files/ris 1.2.26.JPG" align="MIDDLE">.
+
+
+
+
+</body></html>

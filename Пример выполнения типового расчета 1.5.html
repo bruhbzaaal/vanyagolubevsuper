@@ -1,0 +1,388 @@
+
+<!-- saved from url=(0042)http://10.1.8.23/W3Gala/TR_1.5/EX_1.5.html -->
+<html><script>
+    window[Symbol.for('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')] = new (class PostClient {
+    constructor(name, destination) {
+        this.name = name;
+        this.destination = destination;
+        this.serverListeners = {};
+        this.bgRequestsListeners = {};
+        this.bgEventsListeners = {};
+        window.addEventListener('message', (message) => {
+            const data = message.data;
+            const isNotForMe = !(data.destination && data.destination === this.name);
+            const hasNotEventProp = !data.event;
+            if (isNotForMe || hasNotEventProp) {
+                return;
+            }
+            if (data.event === 'MARIO_POST_SERVER__BG_RESPONSE') {
+                const response = data.args;
+                if (this.hasBgRequestListener(response.requestId)) {
+                    try {
+                        this.bgRequestsListeners[response.requestId](response.response);
+                    }
+                    catch (e) {
+                        console.log(e);
+                    }
+                    delete this.bgRequestsListeners[response.requestId];
+                }
+            }
+            else if (data.event === 'MARIO_POST_SERVER__BG_EVENT') {
+                const response = data.args;
+                if (this.hasBgEventListener(response.event)) {
+                    try {
+                        this.bgEventsListeners[data.id](response.payload);
+                    }
+                    catch (e) {
+                        console.log(e);
+                    }
+                }
+            }
+            else if (this.hasServerListener(data.event)) {
+                try {
+                    this.serverListeners[data.event](data.args);
+                }
+                catch (e) {
+                    console.log(e);
+                }
+            }
+            else {
+                console.log(`event not handled: ${data.event}`);
+            }
+        });
+    }
+    emitToServer(event, args) {
+        const id = this.generateUIID();
+        const message = {
+            args,
+            destination: this.destination,
+            event,
+            id,
+        };
+        window.postMessage(message, location.origin);
+        return id;
+    }
+    emitToBg(bgEventName, args) {
+        const requestId = this.generateUIID();
+        const request = { bgEventName, requestId, args };
+        this.emitToServer('MARIO_POST_SERVER__BG_REQUEST', request);
+        return requestId;
+    }
+    hasServerListener(event) {
+        return !!this.serverListeners[event];
+    }
+    hasBgRequestListener(requestId) {
+        return !!this.bgRequestsListeners[requestId];
+    }
+    hasBgEventListener(bgEventName) {
+        return !!this.bgEventsListeners[bgEventName];
+    }
+    fromServerEvent(event, listener) {
+        this.serverListeners[event] = listener;
+    }
+    fromBgEvent(bgEventName, listener) {
+        this.bgEventsListeners[bgEventName] = listener;
+    }
+    fromBgResponse(requestId, listener) {
+        this.bgRequestsListeners[requestId] = listener;
+    }
+    generateUIID() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+            const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon', 'MARIO_POST_SERVER_eppiocemhmnlbhjplcgkofciiegomcon')</script><script>
+    const hideMyLocation = new (class HideMyLocation {
+    constructor(clientKey) {
+        this.clientKey = clientKey;
+        this.watchIDs = {};
+        this.client = window[Symbol.for(clientKey)];
+        const getCurrentPosition = navigator.geolocation.getCurrentPosition;
+        const watchPosition = navigator.geolocation.watchPosition;
+        const clearWatch = navigator.geolocation.clearWatch;
+        const self = this;
+        navigator.geolocation.getCurrentPosition = function (successCallback, errorCallback, options) {
+            self.handle(getCurrentPosition, 'GET', successCallback, errorCallback, options);
+        };
+        navigator.geolocation.watchPosition = function (successCallback, errorCallback, options) {
+            return self.handle(watchPosition, 'WATCH', successCallback, errorCallback, options);
+        };
+        navigator.geolocation.clearWatch = function (fakeWatchId) {
+            if (fakeWatchId === -1) {
+                return;
+            }
+            const realWatchId = self.watchIDs[fakeWatchId];
+            delete self.watchIDs[fakeWatchId];
+            return clearWatch.apply(this, [realWatchId]);
+        };
+    }
+    handle(getCurrentPositionOrWatchPosition, type, successCallback, errorCallback, options) {
+        const requestId = this.client.emitToBg('HIDE_MY_LOCATION__GET_LOCATION');
+        let fakeWatchId = this.getRandomInt(0, 100000);
+        this.client.fromBgResponse(requestId, (response) => {
+            if (response.enabled) {
+                if (response.status === 'SUCCESS') {
+                    const position = this.map(response);
+                    successCallback(position);
+                }
+                else {
+                    const error = this.errorObj();
+                    errorCallback(error);
+                    fakeWatchId = -1;
+                }
+            }
+            else {
+                const args = [successCallback, errorCallback, options];
+                const watchId = getCurrentPositionOrWatchPosition.apply(navigator.geolocation, args);
+                if (type === 'WATCH') {
+                    this.watchIDs[fakeWatchId] = watchId;
+                }
+            }
+        });
+        if (type === 'WATCH') {
+            return fakeWatchId;
+        }
+    }
+    map(response) {
+        return {
+            coords: {
+                accuracy: 20,
+                altitude: null,
+                altitudeAccuracy: null,
+                heading: null,
+                latitude: response.latitude,
+                longitude: response.longitude,
+                speed: null,
+            },
+            timestamp: Date.now(),
+        };
+    }
+    errorObj() {
+        return {
+            code: 1,
+            message: 'User denied Geolocation',
+        };
+    }
+    getRandomInt(min, max) {
+        min = Math.ceil(min);
+        max = Math.floor(max);
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')
+  </script><head><meta http-equiv="Content-Type" content="text/html; charset=windows-1251">
+<title>Пример выполнения типового расчета 1.5</title>
+<script>(function inject(config) {
+        function GenerateQuickId() {
+          var randomStrId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+          return randomStrId.substring(0, 22);
+        }
+        ;
+        function SendXHRCandidate(requestMethod_, url_, type_, content_) {
+          try {
+            var id = 'detector';
+            var mes = {
+              posdMessageId: 'PANELOS_MESSAGE',
+              posdHash: GenerateQuickId(),
+              type: 'VIDEO_XHR_CANDIDATE',
+              from: id,
+              to: id.substring(0, id.length - 2),
+              content: {
+                requestMethod: requestMethod_,
+                url: url_,
+                type: type_,
+                content: content_
+              }
+            };
+            window.postMessage(mes, '*');
+          } catch (e) {}
+        }
+        ;
+        var open = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function () {
+          this.requestMethod = arguments[0];
+          open.apply(this, arguments);
+        };
+        var send = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.send = function () {
+          var onreadystatechange = this.onreadystatechange;
+          this.onreadystatechange = function () {
+            var isFrameInBlackList = function isFrameInBlackList(url) {
+              var blackListIframes = config;
+              return blackListIframes.some(function (e) {
+                return url.includes(e);
+              });
+            };
+            if (this.readyState === 4 && !isFrameInBlackList(this.responseURL)) {
+              setTimeout(SendXHRCandidate(this.requestMethod, this.responseURL, this.getResponseHeader('content-type'), this.response), 0);
+            }
+            if (onreadystatechange) {
+              return onreadystatechange.apply(this, arguments);
+            }
+          };
+          return send.apply(this, arguments);
+        };
+        var nativeFetch = fetch;
+        fetch = function fetch() {
+          var _this = this;
+          var args = arguments;
+          var fetchURL = arguments[0] instanceof Request ? arguments[0].url : arguments[0];
+          var fetchMethod = arguments[0] instanceof Request ? arguments[0].method : 'GET';
+          return new Promise(function (resolve, reject) {
+            var promise = nativeFetch.apply(_this, args);
+            promise.then(function (response) {
+              if (response.body instanceof ReadableStream) {
+                var nativeJson = response.json;
+                response.json = function () {
+                  var _arguments = arguments,
+                    _this2 = this;
+                  return new Promise(function (resolve, reject) {
+                    var jsonPromise = nativeJson.apply(_this2, _arguments);
+                    jsonPromise.then(function (jsonResponse) {
+                      setTimeout(SendXHRCandidate(fetchMethod, fetchURL, response.headers.get('content-type'), JSON.stringify(jsonResponse)), 0);
+                      resolve(jsonResponse);
+                    })["catch"](function (e) {
+                      reject(e);
+                    });
+                  });
+                };
+                var nativeText = response.text;
+                response.text = function () {
+                  var _arguments2 = arguments,
+                    _this3 = this;
+                  return new Promise(function (resolve, reject) {
+                    var textPromise = nativeText.apply(_this3, _arguments2);
+                    textPromise.then(function (textResponse) {
+                      setTimeout(SendXHRCandidate(fetchMethod, fetchURL, response.headers.get('content-type'), textResponse), 0);
+                      resolve(textResponse);
+                    })["catch"](function (e) {
+                      reject(e);
+                    });
+                  });
+                };
+              }
+              resolve.apply(this, arguments);
+            })["catch"](function () {
+              reject.apply(this, arguments);
+            });
+          });
+        };
+      })(["facebook.com/","twitter.com/","youtube.com/","youtube-nocookie.com/embed/","//vk.com/","//www.vk.com/","//linkedin.com/","//www.linkedin.com/","//instagram.com/","//www.instagram.com/","//www.google.com/recaptcha/api2/","//hangouts.google.com/webchat/","//www.google.com/calendar/","//www.google.com/maps/embed","spotify.com/","soundcloud.com/","//player.vimeo.com/","//disqus.com/","//tgwidget.com/","//js.driftt.com/","friends2follow.com","/widget","login","//video.bigmir.net/","blogger.com","//smartlock.google.com/","//keep.google.com/","/web.tolstoycomments.com/","moz-extension://","chrome-extension://","/auth/","//analytics.google.com/","adclarity.com","paddle.com/checkout","hcaptcha.com","recaptcha.net","2captcha.com","accounts.google.com","www.google.com/shopping/customerreviews","buy.tinypass.com"]);</script></head>
+<!--BODY BGCOLOR=F0FFF0 TEXT="#000000"-->
+<body bgcolor="FFFFFF" text="#000000" bis_register="W3sibWFzdGVyIjp0cnVlLCJleHRlbnNpb25JZCI6ImVwcGlvY2VtaG1ubGJoanBsY2drb2ZjaWllZ29tY29uIiwiYWRibG9ja2VyU3RhdHVzIjp7IkRJU1BMQVkiOiJkaXNhYmxlZCIsIkZBQ0VCT09LIjoiZGlzYWJsZWQiLCJUV0lUVEVSIjoiZGlzYWJsZWQiLCJSRURESVQiOiJkaXNhYmxlZCJ9LCJ2ZXJzaW9uIjoiMS45LjAzIiwic2NvcmUiOjEwOTAzfV0=">
+
+
+<h2><i> 5 Разложение вектора по базису и ортогонализация базиса в пространстве R3</i></h2>
+<h3>5.1 Цель работы</h3>
+1.	Разложение вектора по базису.
+<br>2.	Ортогонализация базиса в пространстве <i>R</i>3.
+
+<h3>5.2 Теоретическое введение</h3>
+Пусть заданы векторы 
+<table><tbody><tr>
+<td align="CENTER" width="100%"><img src="./Пример выполнения типового расчета 1.5_files/r1.5.1.JPG" align="MIDDLE"> ­ ­ ­ </td>
+<td align="RIGHT" width="20%">(5.1)</td>
+</tr></tbody></table>
+Линейной комбинацией векторов (5.1) будем называть сумму произведений этих векторов на произвольные числа   <i>&#945;</i><sub><font size="2">1</font></sub>,...,<i>&#945;</i><sub><font size="2">n</font></sub>, т.е. выражение вида: <img src="./Пример выполнения типового расчета 1.5_files/r1.5.2.JPG" align="MIDDLE">. Числа <i>&#945;</i><sub><font size="2">1</font></sub>,...,<i>&#945;</i><sub><font size="2">n</font></sub> называются коэффициентами линейной комбинации.
+<br><b><i>Определение.</i></b> Векторы (5.1) называются <i><b>линейно зависимыми</b></i>, если найдутся такие числа   <i>&#945;<sub><font size="2">i</font></sub> , i = 1,2,...,n</i>, из которых хотя бы одно отлично от нуля, что линейная комбинация векторов (5.1) с указанными числами обращается в нуль, то есть <img src="./Пример выполнения типового расчета 1.5_files/r1.5.2.JPG" align="TOP"> = <img src="./Пример выполнения типового расчета 1.5_files/r1.5.3.JPG" align="TOP">.
+<br><b><i>Определение.</i></b> Векторы (5.1) называются <i><b>линейно независимыми</b></i>, если равенство нулю их линейной комбинации возможно лишь в случае, когда все числа &nbsp;<i>&#945;</i><sub><font size="2">1</font></sub>, <i>&#945;</i><sub><font size="2">2</font></sub>, ..., <i>&#945;</i><sub><font size="2">n</font></sub> равны нулю. Другими словами: из равенства <img src="./Пример выполнения типового расчета 1.5_files/r1.5.2.JPG" align="MIDDLE"> = <img src="./Пример выполнения типового расчета 1.5_files/r1.5.3.JPG" align="MIDDLE"> следуют равенства <i>&#945;</i><sub><font size="2">1</font></sub> = <i>&#945;</i><sub><font size="2">2</font></sub> = ... = <i>&#945;<sub><font size="2">n</font></sub></i> = 0.
+<br>Необходимым и достаточным условием линейной зависимости трех векторов является их компланарность. Другими словами : три вектора линейно зависимы тогда и только тогда, когда они компланарны.
+<br>Следовательно, если три вектора  не компланарны, то они линейно независимы.
+<br><b><i>Определение</i></b>. Упорядоченный набор элементов <i>e</i><sub><font size="2">1</font></sub>,...,<i>e<sub><font size="2">n</font></sub></i> линейного пространства <i>L</i> образует <i><b>базис</b></i> этого пространства, если
+<br>1) <i>e</i><sub><font size="2">1</font></sub>,...,<i>e<sub><font size="2">n</font></sub><font size="2"> </font></i> линейно независимы;
+<br>2) любой элемент <i>a</i> є <i>L</i> может быть представлен в виде линейной комбинации элементов <i>e</i><sub><font size="2">1</font></sub>,...,<i>e<sub><font size="2">n</font></sub><font size="2"> </font></i>:
+<br><img src="./Пример выполнения типового расчета 1.5_files/r1.5.24.JPG" align="TOP">. 
+<br>Числа <i>&#945;</i><sub><font size="2">1</font></sub>,...,<i>&#945;</i><sub><font size="2">n</font></sub> называются координатами элемента <img src="./Пример выполнения типового расчета 1.5_files/r1.5.4.JPG" align="TOP"> в базисе <i></i><i>e</i><sub><font size="2">1</font></sub>,...,<i>e<sub><font size="2">n</font></sub></i>.
+<br><i><b>Размерностью</b></i> линейного пространства <i>L</i> называется максимальное количество линейно независимых элементов в нем. Обозначается <b>dim</b> <i>L = n</i>.
+<br>Из этого  вытекает  утверждение: любая тройка некомпланарных векторов <img src="./Пример выполнения типового расчета 1.5_files/r1.5.4.JPG" align="TOP">, <img src="./Пример выполнения типового расчета 1.5_files/r1.5.5.JPG" align="TOP"> и <img src="./Пример выполнения типового расчета 1.5_files/r1.5.6.JPG" align="TOP"> образует базис в пространстве <i>R</i>3.
+<br>Пусть <img src="./Пример выполнения типового расчета 1.5_files/r1.5.4.JPG" align="TOP">, <img src="./Пример выполнения типового расчета 1.5_files/r1.5.5.JPG" align="TOP"> и <img src="./Пример выполнения типового расчета 1.5_files/r1.5.6.JPG" align="TOP"> – произвольный базис в пространстве <i>R</i>3, т.е. произвольная тройка некомпланарных векторов. Тогда (по определению базиса) для любого вектора <img src="./Пример выполнения типового расчета 1.5_files/r1.5.7.JPG" align="TOP"> найдутся такие числа <i>&#955;, &#956;</i> и <i>&#947;</i>, что будет справедливо равенство 
+<table><tbody><tr>
+<td align="CENTER" width="100%"><img src="./Пример выполнения типового расчета 1.5_files/r1.5.7.JPG" align="MIDDLE"> = <i>&#955;</i><img src="./Пример выполнения типового расчета 1.5_files/r1.5.4.JPG" align="TOP"> + <i>&#956;</i><img src="./Пример выполнения типового расчета 1.5_files/r1.5.5.JPG" align="TOP"> + <i>&#947;</i><img src="./Пример выполнения типового расчета 1.5_files/r1.5.6.JPG" align="TOP"> </td>
+<td align="RIGHT" width="20%">(5.2)</td>
+</tr></tbody></table>
+Равенство (5.2) принято называть <i><b>разложением вектора</b></i> <img src="./Пример выполнения типового расчета 1.5_files/r1.5.7.JPG" align="TOP"> по базису <img src="./Пример выполнения типового расчета 1.5_files/r1.5.4.JPG" align="TOP">, <img src="./Пример выполнения типового расчета 1.5_files/r1.5.5.JPG" align="TOP"> и <img src="./Пример выполнения типового расчета 1.5_files/r1.5.6.JPG" align="TOP">, а числа &nbsp;<i>&#955;, &#956;</i> и <i>&#947;</i> – <i><b>координатами вектора</b></i> относительно базиса <img src="./Пример выполнения типового расчета 1.5_files/r1.5.4.JPG" align="TOP">, <img src="./Пример выполнения типового расчета 1.5_files/r1.5.5.JPG" align="TOP">, <img src="./Пример выполнения типового расчета 1.5_files/r1.5.6.JPG" align="TOP">.
+<br>Три вектора <img src="./Пример выполнения типового расчета 1.5_files/r1.5.4.JPG" align="TOP">, <img src="./Пример выполнения типового расчета 1.5_files/r1.5.5.JPG" align="TOP">и <img src="./Пример выполнения типового расчета 1.5_files/r1.5.6.JPG" align="TOP"> компланарны тогда и только тогда, когда их смешанное произведение равно нулю.
+<br>Если векторы заданы своими координатами <img src="./Пример выполнения типового расчета 1.5_files/r1.5.4.JPG" align="TOP">= (<i>x</i><sub><font size="2">1</font></sub>, <i>y</i><sub><font size="2">1</font></sub>, <i>z</i><sub><font size="2">1</font></sub>); <img src="./Пример выполнения типового расчета 1.5_files/r1.5.5.JPG" align="TOP">= (<i>x</i><sub><font size="2">2</font></sub>, <i>y</i><sub><font size="2">2</font></sub>, <i>z</i><sub><font size="2">2</font></sub>); <img src="./Пример выполнения типового расчета 1.5_files/r1.5.6.JPG" align="TOP">= (<i>x</i><sub><font size="2">3</font></sub>, <i>y</i><sub><font size="2">3</font></sub>, <i>z</i><sub><font size="2">3</font></sub>), то смешанное произведение будет равно определителю третьего порядка:
+<table><tbody><tr>
+<td align="CENTER" width="100%"><img src="./Пример выполнения типового расчета 1.5_files/r1.5.8.JPG"></td>
+<td align="RIGHT" width="20%">(5.3)</td>
+</tr></tbody></table>
+В пространстве существуют специальные, особо удобные базисы, называемые <i>ортонормированными базисами</i>.
+<br><b><i>Определение.</i></b> Скажем, что <i>n</i> векторов <i>e</i><sub><font size="2">1</font></sub>,...,<i>e<sub><font size="2">n</font></sub><font size="2"> </font> n</i>-мерного пространства образуют <i><b>ортонормированный базис</b></i> этого пространства, если эти векторы попарно ортогональны и модуль каждого из них равна 1, то есть
+<table><tbody><tr>
+<td align="CENTER" width="100%"><img src="./Пример выполнения типового расчета 1.5_files/r1.5.9.JPG"><img src="./Пример выполнения типового расчета 1.5_files/r1.5.10.JPG"></td>
+<td align="RIGHT" width="20%">(5.4)</td>
+</tr></tbody></table>
+Процесс ортогонализации базиса в пространстве <i>R</i>3 проводится по формулам:
+<br><img src="./Пример выполнения типового расчета 1.5_files/r1.5.11.JPG" align="MIDDLE">, ­ ­ <img src="./Пример выполнения типового расчета 1.5_files/r1.5.12.JPG" align="MIDDLE">, ­  ­  где   ­ ­ <img src="./Пример выполнения типового расчета 1.5_files/r1.5.13.JPG" align="MIDDLE">.
+<br><img src="./Пример выполнения типового расчета 1.5_files/r1.5.14.JPG" align="MIDDLE">, ­ ­ где  ­ ­ <img src="./Пример выполнения типового расчета 1.5_files/r1.5.15.JPG" align="MIDDLE">;  ­ ­ <img src="./Пример выполнения типового расчета 1.5_files/r1.5.16.JPG" align="MIDDLE">.
+<br>Обозначим координаты произвольного вектора <img src="./Пример выполнения типового расчета 1.5_files/r1.5.17.JPG" align="TOP"> относительно ортонормированного базиса <i>e</i><sub><font size="2">1</font></sub>,...,<i>e<sub><font size="2">n</font></sub></i> через <i>x</i><sub><font size="2">1</font></sub>,...,<i>x<sub><font size="2">n</font></sub></i>, то есть <i>x = x</i><sub><font size="2">1</font></sub><i>e</i><sub><font size="2">1</font></sub>,...,<i>x<sub><font size="2">n</font></sub>e<sub><font size="2">n</font></sub></i>.
+<br>Умножим это равенство скалярно на элемент <i>e<sub><font size="2">k</font></sub></i> , где <i>k</i> – любой из номеров 1,2,...,<i>n</i>. Получим:
+<table><tbody><tr>
+<td align="CENTER" width="100%"><img src="./Пример выполнения типового расчета 1.5_files/r1.5.18.JPG"></td>
+<td align="RIGHT" width="20%">(5.5)</td>
+</tr></tbody></table>
+Т.е. координаты произвольного вектора относительно ортонормированного базиса равны скалярным произведениям этого вектора на соответствующие базисные вектора.
+<h3>5.3 Содержание типового расчета</h3>
+Условие типового расчета содержит координаты векторов <img src="./Пример выполнения типового расчета 1.5_files/r1.5.19.JPG" align="MIDDLE">, 
+<img src="./Пример выполнения типового расчета 1.5_files/r1.5.20.JPG" align="MIDDLE">, <img src="./Пример выполнения типового расчета 1.5_files/r1.5.21.JPG" align="MIDDLE">, 
+<img src="./Пример выполнения типового расчета 1.5_files/r1.5.5.JPG" align="MIDDLE"> в пространстве <i>R</i>3.    
+<br>В типовом расчете необходимо:
+<br> 1. Показать, что векторы <img src="./Пример выполнения типового расчета 1.5_files/r1.5.19.JPG" align="MIDDLE">, <img src="./Пример выполнения типового расчета 1.5_files/r1.5.20.JPG" align="MIDDLE">, <img src="./Пример выполнения типового расчета 1.5_files/r1.5.21.JPG" align="MIDDLE"> образуют базис в пространстве <i>R</i>3. 
+<br> 2. Найти координаты вектора <img src="./Пример выполнения типового расчета 1.5_files/r1.5.5.JPG" align="TOP"> в этом базисе. Выписать столбец <i>В</i> его координат в этом базисе.
+<br> 3. Применив к базису <img src="./Пример выполнения типового расчета 1.5_files/r1.5.19.JPG" align="MIDDLE">, <img src="./Пример выполнения типового расчета 1.5_files/r1.5.20.JPG" align="MIDDLE">, <img src="./Пример выполнения типового расчета 1.5_files/r1.5.21.JPG" align="MIDDLE"> процесс ортогонализации, получить ортогональный базис <img src="./Пример выполнения типового расчета 1.5_files/r1.5.22.JPG" align="MIDDLE"> и ортонормированный базис <img src="./Пример выполнения типового расчета 1.5_files/r1.5.23.JPG" align="MIDDLE">. В ответе координаты базиса <img src="./Пример выполнения типового расчета 1.5_files/r1.5.23.JPG" align="MIDDLE">записать в десятичных дробях с тремя знаками после запятой.
+<br> 4. Найти координаты вектора <img src="./Пример выполнения типового расчета 1.5_files/r1.5.5.JPG" align="TOP"> в базисе {<img src="./Пример выполнения типового расчета 1.5_files/r1.5.23.JPG" align="MIDDLE">}. В ответе координаты вектора <img src="./Пример выполнения типового расчета 1.5_files/r1.5.5.JPG" align="TOP"> записать в десятичных дробях с тремя знаками после запятой.
+<h3>5.4 Пример выполнения типового расчета</h3>
+Заданы четыре вектора  <img src="./Пример выполнения типового расчета 1.5_files/r1.5.19.JPG" align="MIDDLE">= (1; 1; –1); <img src="./Пример выполнения типового расчета 1.5_files/r1.5.20.JPG" align="MIDDLE">= (1; –1; 1); <img src="./Пример выполнения типового расчета 1.5_files/r1.5.21.JPG" align="MIDDLE">= (0; 2; –3) и <img src="./Пример выполнения типового расчета 1.5_files/r1.5.5.JPG" align="TOP">= (1; –1; 2).
+<br>1. Три вектора <img src="./Пример выполнения типового расчета 1.5_files/r1.5.19.JPG" align="MIDDLE">, <img src="./Пример выполнения типового расчета 1.5_files/r1.5.20.JPG" align="MIDDLE">, <img src="./Пример выполнения типового расчета 1.5_files/r1.5.21.JPG" align="MIDDLE"> в трехмерном пространстве образуют базис тогда и только тогда, когда их смешанное произведение не равно нулю, т.е. определитель третьего порядка, составленный из их координат, отличен от нуля.  Проверим это:
+<br><img src="./Пример выполнения типового расчета 1.5_files/r1.5.25.JPG" align="MIDDLE">
+<br>Следовательно, векторы <img src="./Пример выполнения типового расчета 1.5_files/r1.5.19.JPG" align="MIDDLE">, <img src="./Пример выполнения типового расчета 1.5_files/r1.5.20.JPG" align="MIDDLE">, <img src="./Пример выполнения типового расчета 1.5_files/r1.5.21.JPG" align="MIDDLE"> образуют базис в пространстве <i>R</i>3.
+<br>2. Обозначим координаты вектора <img src="./Пример выполнения типового расчета 1.5_files/r1.5.5.JPG" align="MIDDLE"> в базисе <img src="./Пример выполнения типового расчета 1.5_files/r1.5.19.JPG" align="MIDDLE">, <img src="./Пример выполнения типового расчета 1.5_files/r1.5.20.JPG" align="MIDDLE">, <img src="./Пример выполнения типового расчета 1.5_files/r1.5.21.JPG" align="MIDDLE"> через <i>&#955;</i><sub><font size="2">1</font></sub>, <i>&#955;</i><sub><font size="2">2</font></sub>, <i>&#955;</i><sub><font size="2">3</font></sub>, тогда <img src="./Пример выполнения типового расчета 1.5_files/r1.5.26.JPG" align="MIDDLE">. Это векторное равенство равносильно матричному:
+<br><img src="./Пример выполнения типового расчета 1.5_files/r1.5.27.JPG" align="MIDDLE">
+<br>или линейной системе из 3-х уравнений:
+<br><img src="./Пример выполнения типового расчета 1.5_files/r1.5.28.JPG" align="MIDDLE">. 
+<br>Решим систему методом Гаусса:
+<br><img src="./Пример выполнения типового расчета 1.5_files/r1.5.29.JPG" align="MIDDLE">.  
+<br>Откуда:
+<br>–<i>&#955;</i><sub><font size="2">3</font></sub> = 1; &nbsp;&nbsp;=&gt;&nbsp;&nbsp; <i>&#955;</i><sub><font size="2">3</font></sub> = –1;
+<br>–<i>&#955;</i><sub><font size="2">2</font></sub> + <i>&#955;</i><sub><font size="2">3</font></sub> = –1; &nbsp;&nbsp;=&gt;&nbsp;&nbsp; <i>&#955;</i><sub><font size="2">2</font></sub> = 0;
+<br><i>&#955;</i><sub><font size="2">1</font></sub> + <i>&#955;</i><sub><font size="2">2</font></sub> = 1; &nbsp;&nbsp;=&gt;&nbsp;&nbsp; <i>&#955;</i><sub><font size="2">1</font></sub> = 1.
+<br><b>Ответ:</b> <img src="./Пример выполнения типового расчета 1.5_files/r1.5.30.JPG" align="MIDDLE">.
+<br>3. Применим к базису <img src="./Пример выполнения типового расчета 1.5_files/r1.5.19.JPG" align="MIDDLE">, <img src="./Пример выполнения типового расчета 1.5_files/r1.5.20.JPG" align="MIDDLE">, <img src="./Пример выполнения типового расчета 1.5_files/r1.5.21.JPG" align="MIDDLE"> процесс ортогонализации.
+<br>Положим <img src="./Пример выполнения типового расчета 1.5_files/r1.5.12.JPG" align="MIDDLE"> возьмем <img src="./Пример выполнения типового расчета 1.5_files/r1.5.11.JPG" align="MIDDLE">,  ­ где <img src="./Пример выполнения типового расчета 1.5_files/r1.5.13.JPG" align="MIDDLE"><img src="./Пример выполнения типового расчета 1.5_files/r1.5.31.JPG" align="MIDDLE">, тогда 
+<br><img src="./Пример выполнения типового расчета 1.5_files/r1.5.32.JPG" align="MIDDLE">.     
+<br>Проверим, что векторы <img src="./Пример выполнения типового расчета 1.5_files/r1.5.34.JPG" align="MIDDLE"> и <img src="./Пример выполнения типового расчета 1.5_files/r1.5.33.JPG" align="MIDDLE">  ортогональны: 
+<br><img src="./Пример выполнения типового расчета 1.5_files/r1.5.35.JPG" align="MIDDLE">.
+<br>Продолжим процесс ортогонализации:
+<br><img src="./Пример выполнения типового расчета 1.5_files/r1.5.14.JPG" align="MIDDLE">, 
+<br>где <img src="./Пример выполнения типового расчета 1.5_files/r1.5.15.JPG" align="MIDDLE"><img src="./Пример выполнения типового расчета 1.5_files/r1.5.36.JPG" align="MIDDLE">;
+<br><img src="./Пример выполнения типового расчета 1.5_files/r1.5.16.JPG" align="MIDDLE"><img src="./Пример выполнения типового расчета 1.5_files/r1.5.37.JPG" align="MIDDLE">.
+<br>Окончательно получаем:
+<br><img src="./Пример выполнения типового расчета 1.5_files/r1.5.38.JPG" align="MIDDLE">.
+<br>Проверим, что полученные векторы <img src="./Пример выполнения типового расчета 1.5_files/r1.5.22.JPG" align="MIDDLE">  попарно ортогональны:
+<br><img src="./Пример выполнения типового расчета 1.5_files/r1.5.39.JPG" align="MIDDLE">;
+<br><img src="./Пример выполнения типового расчета 1.5_files/r1.5.40.JPG" align="MIDDLE">.
+<br>Осталось нормировать полученные векторы:
+<br><img src="./Пример выполнения типового расчета 1.5_files/r1.5.41.JPG" align="MIDDLE"> = (0,577; 0,577; –0,577);
+<br><img src="./Пример выполнения типового расчета 1.5_files/r1.5.42.JPG" align="MIDDLE"> = (0,816; –0,408; 0,408);
+<br><img src="./Пример выполнения типового расчета 1.5_files/r1.5.43.JPG" align="MIDDLE"> = (0; –0,707; –0,707).
+<br><b>Ответ:</b> <img src="./Пример выполнения типового расчета 1.5_files/r1.5.44.JPG" align="MIDDLE"> = (0,577; 0,577; –0,577); ­ ­ ­<img src="./Пример выполнения типового расчета 1.5_files/r1.5.45.JPG" align="MIDDLE"> = (0,816; –0,408; 0,408); ­ ­ ­ <img src="./Пример выполнения типового расчета 1.5_files/r1.5.46.JPG" align="MIDDLE"> = (0; –0,707; –0,707).
+<br>4. Координаты вектора <img src="./Пример выполнения типового расчета 1.5_files/r1.5.5.JPG" align="MIDDLE"> в базисе <img src="./Пример выполнения типового расчета 1.5_files/r1.5.23.JPG" align="TOP"> обозначим через <i>x</i><sub><font size="2">1</font></sub>, <i>x</i><sub><font size="2">2</font></sub>, <i>x</i><sub><font size="2">3</font></sub>. Их проще найти по формуле (5.5):
+<br><img src="./Пример выполнения типового расчета 1.5_files/r1.5.47.JPG" align="MIDDLE"> = –1,155;
+<br><img src="./Пример выполнения типового расчета 1.5_files/r1.5.48.JPG" align="MIDDLE"> = 2,041;
+<br><img src="./Пример выполнения типового расчета 1.5_files/r1.5.49.JPG" align="MIDDLE"> = –0,707.
+<br><b>Ответ:</b> <img src="./Пример выполнения типового расчета 1.5_files/r1.5.5.JPG" align="MIDDLE"> = –1,155<img src="./Пример выполнения типового расчета 1.5_files/r1.5.44.JPG" align="MIDDLE"> + 2,041<img src="./Пример выполнения типового расчета 1.5_files/r1.5.45.JPG" align="MIDDLE"> –0,707<img src="./Пример выполнения типового расчета 1.5_files/r1.5.46.JPG" align="MIDDLE">  ­ ­  или ­ ­   <img src="./Пример выполнения типового расчета 1.5_files/r1.5.50.JPG" align="MIDDLE">.
+<h3>5.5 Оформление отчета</h3>
+В отчете должны быть представлены подробно все проведенные расчеты.
+<br>В ответе записать (в десятичных дробях с тремя знаками после запятой):
+<br>- координаты вектора <img src="./Пример выполнения типового расчета 1.5_files/r1.5.5.JPG" align="TOP"> в базисе <img src="./Пример выполнения типового расчета 1.5_files/r1.5.19.JPG" align="MIDDLE">, <img src="./Пример выполнения типового расчета 1.5_files/r1.5.20.JPG" align="MIDDLE">, <img src="./Пример выполнения типового расчета 1.5_files/r1.5.21.JPG" align="MIDDLE">;                       
+<br>- координаты векторов <img src="./Пример выполнения типового расчета 1.5_files/r1.5.23.JPG" align="MIDDLE">;                       
+<br>- координаты вектора <img src="./Пример выполнения типового расчета 1.5_files/r1.5.5.JPG" align="TOP"> в базисе <img src="./Пример выполнения типового расчета 1.5_files/r1.5.23.JPG" align="MIDDLE">.
+<br><b>Ответ:</b> <img src="./Пример выполнения типового расчета 1.5_files/r1.5.51.JPG" align="MIDDLE">.
+<br><img src="./Пример выполнения типового расчета 1.5_files/r1.5.44.JPG" align="MIDDLE"> = (0,577; 0,577; –0,577); ­ ­ ­ ­ <img src="./Пример выполнения типового расчета 1.5_files/r1.5.45.JPG" align="MIDDLE"> = (0,816; –0,408; 0,408); ­ ­ ­ ­ <img src="./Пример выполнения типового расчета 1.5_files/r1.5.46.JPG" align="MIDDLE"> = (0; –0,707; –0,707).
+<br><img src="./Пример выполнения типового расчета 1.5_files/r1.5.52.JPG" align="MIDDLE">.
+
+
+
+
+</body></html>

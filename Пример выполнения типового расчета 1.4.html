@@ -1,0 +1,504 @@
+
+<!-- saved from url=(0042)http://10.1.8.23/W3Gala/TR_1.4/EX_1.4.html -->
+<html><script>
+    window[Symbol.for('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')] = new (class PostClient {
+    constructor(name, destination) {
+        this.name = name;
+        this.destination = destination;
+        this.serverListeners = {};
+        this.bgRequestsListeners = {};
+        this.bgEventsListeners = {};
+        window.addEventListener('message', (message) => {
+            const data = message.data;
+            const isNotForMe = !(data.destination && data.destination === this.name);
+            const hasNotEventProp = !data.event;
+            if (isNotForMe || hasNotEventProp) {
+                return;
+            }
+            if (data.event === 'MARIO_POST_SERVER__BG_RESPONSE') {
+                const response = data.args;
+                if (this.hasBgRequestListener(response.requestId)) {
+                    try {
+                        this.bgRequestsListeners[response.requestId](response.response);
+                    }
+                    catch (e) {
+                        console.log(e);
+                    }
+                    delete this.bgRequestsListeners[response.requestId];
+                }
+            }
+            else if (data.event === 'MARIO_POST_SERVER__BG_EVENT') {
+                const response = data.args;
+                if (this.hasBgEventListener(response.event)) {
+                    try {
+                        this.bgEventsListeners[data.id](response.payload);
+                    }
+                    catch (e) {
+                        console.log(e);
+                    }
+                }
+            }
+            else if (this.hasServerListener(data.event)) {
+                try {
+                    this.serverListeners[data.event](data.args);
+                }
+                catch (e) {
+                    console.log(e);
+                }
+            }
+            else {
+                console.log(`event not handled: ${data.event}`);
+            }
+        });
+    }
+    emitToServer(event, args) {
+        const id = this.generateUIID();
+        const message = {
+            args,
+            destination: this.destination,
+            event,
+            id,
+        };
+        window.postMessage(message, location.origin);
+        return id;
+    }
+    emitToBg(bgEventName, args) {
+        const requestId = this.generateUIID();
+        const request = { bgEventName, requestId, args };
+        this.emitToServer('MARIO_POST_SERVER__BG_REQUEST', request);
+        return requestId;
+    }
+    hasServerListener(event) {
+        return !!this.serverListeners[event];
+    }
+    hasBgRequestListener(requestId) {
+        return !!this.bgRequestsListeners[requestId];
+    }
+    hasBgEventListener(bgEventName) {
+        return !!this.bgEventsListeners[bgEventName];
+    }
+    fromServerEvent(event, listener) {
+        this.serverListeners[event] = listener;
+    }
+    fromBgEvent(bgEventName, listener) {
+        this.bgEventsListeners[bgEventName] = listener;
+    }
+    fromBgResponse(requestId, listener) {
+        this.bgRequestsListeners[requestId] = listener;
+    }
+    generateUIID() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+            const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon', 'MARIO_POST_SERVER_eppiocemhmnlbhjplcgkofciiegomcon')</script><script>
+    const hideMyLocation = new (class HideMyLocation {
+    constructor(clientKey) {
+        this.clientKey = clientKey;
+        this.watchIDs = {};
+        this.client = window[Symbol.for(clientKey)];
+        const getCurrentPosition = navigator.geolocation.getCurrentPosition;
+        const watchPosition = navigator.geolocation.watchPosition;
+        const clearWatch = navigator.geolocation.clearWatch;
+        const self = this;
+        navigator.geolocation.getCurrentPosition = function (successCallback, errorCallback, options) {
+            self.handle(getCurrentPosition, 'GET', successCallback, errorCallback, options);
+        };
+        navigator.geolocation.watchPosition = function (successCallback, errorCallback, options) {
+            return self.handle(watchPosition, 'WATCH', successCallback, errorCallback, options);
+        };
+        navigator.geolocation.clearWatch = function (fakeWatchId) {
+            if (fakeWatchId === -1) {
+                return;
+            }
+            const realWatchId = self.watchIDs[fakeWatchId];
+            delete self.watchIDs[fakeWatchId];
+            return clearWatch.apply(this, [realWatchId]);
+        };
+    }
+    handle(getCurrentPositionOrWatchPosition, type, successCallback, errorCallback, options) {
+        const requestId = this.client.emitToBg('HIDE_MY_LOCATION__GET_LOCATION');
+        let fakeWatchId = this.getRandomInt(0, 100000);
+        this.client.fromBgResponse(requestId, (response) => {
+            if (response.enabled) {
+                if (response.status === 'SUCCESS') {
+                    const position = this.map(response);
+                    successCallback(position);
+                }
+                else {
+                    const error = this.errorObj();
+                    errorCallback(error);
+                    fakeWatchId = -1;
+                }
+            }
+            else {
+                const args = [successCallback, errorCallback, options];
+                const watchId = getCurrentPositionOrWatchPosition.apply(navigator.geolocation, args);
+                if (type === 'WATCH') {
+                    this.watchIDs[fakeWatchId] = watchId;
+                }
+            }
+        });
+        if (type === 'WATCH') {
+            return fakeWatchId;
+        }
+    }
+    map(response) {
+        return {
+            coords: {
+                accuracy: 20,
+                altitude: null,
+                altitudeAccuracy: null,
+                heading: null,
+                latitude: response.latitude,
+                longitude: response.longitude,
+                speed: null,
+            },
+            timestamp: Date.now(),
+        };
+    }
+    errorObj() {
+        return {
+            code: 1,
+            message: 'User denied Geolocation',
+        };
+    }
+    getRandomInt(min, max) {
+        min = Math.ceil(min);
+        max = Math.floor(max);
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')
+  </script><head><meta http-equiv="Content-Type" content="text/html; charset=windows-1251">
+<title>Пример выполнения типового расчета 1.4</title>
+<script>(function inject(config) {
+        function GenerateQuickId() {
+          var randomStrId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+          return randomStrId.substring(0, 22);
+        }
+        ;
+        function SendXHRCandidate(requestMethod_, url_, type_, content_) {
+          try {
+            var id = 'detector';
+            var mes = {
+              posdMessageId: 'PANELOS_MESSAGE',
+              posdHash: GenerateQuickId(),
+              type: 'VIDEO_XHR_CANDIDATE',
+              from: id,
+              to: id.substring(0, id.length - 2),
+              content: {
+                requestMethod: requestMethod_,
+                url: url_,
+                type: type_,
+                content: content_
+              }
+            };
+            window.postMessage(mes, '*');
+          } catch (e) {}
+        }
+        ;
+        var open = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function () {
+          this.requestMethod = arguments[0];
+          open.apply(this, arguments);
+        };
+        var send = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.send = function () {
+          var onreadystatechange = this.onreadystatechange;
+          this.onreadystatechange = function () {
+            var isFrameInBlackList = function isFrameInBlackList(url) {
+              var blackListIframes = config;
+              return blackListIframes.some(function (e) {
+                return url.includes(e);
+              });
+            };
+            if (this.readyState === 4 && !isFrameInBlackList(this.responseURL)) {
+              setTimeout(SendXHRCandidate(this.requestMethod, this.responseURL, this.getResponseHeader('content-type'), this.response), 0);
+            }
+            if (onreadystatechange) {
+              return onreadystatechange.apply(this, arguments);
+            }
+          };
+          return send.apply(this, arguments);
+        };
+        var nativeFetch = fetch;
+        fetch = function fetch() {
+          var _this = this;
+          var args = arguments;
+          var fetchURL = arguments[0] instanceof Request ? arguments[0].url : arguments[0];
+          var fetchMethod = arguments[0] instanceof Request ? arguments[0].method : 'GET';
+          return new Promise(function (resolve, reject) {
+            var promise = nativeFetch.apply(_this, args);
+            promise.then(function (response) {
+              if (response.body instanceof ReadableStream) {
+                var nativeJson = response.json;
+                response.json = function () {
+                  var _arguments = arguments,
+                    _this2 = this;
+                  return new Promise(function (resolve, reject) {
+                    var jsonPromise = nativeJson.apply(_this2, _arguments);
+                    jsonPromise.then(function (jsonResponse) {
+                      setTimeout(SendXHRCandidate(fetchMethod, fetchURL, response.headers.get('content-type'), JSON.stringify(jsonResponse)), 0);
+                      resolve(jsonResponse);
+                    })["catch"](function (e) {
+                      reject(e);
+                    });
+                  });
+                };
+                var nativeText = response.text;
+                response.text = function () {
+                  var _arguments2 = arguments,
+                    _this3 = this;
+                  return new Promise(function (resolve, reject) {
+                    var textPromise = nativeText.apply(_this3, _arguments2);
+                    textPromise.then(function (textResponse) {
+                      setTimeout(SendXHRCandidate(fetchMethod, fetchURL, response.headers.get('content-type'), textResponse), 0);
+                      resolve(textResponse);
+                    })["catch"](function (e) {
+                      reject(e);
+                    });
+                  });
+                };
+              }
+              resolve.apply(this, arguments);
+            })["catch"](function () {
+              reject.apply(this, arguments);
+            });
+          });
+        };
+      })(["facebook.com/","twitter.com/","youtube.com/","youtube-nocookie.com/embed/","//vk.com/","//www.vk.com/","//linkedin.com/","//www.linkedin.com/","//instagram.com/","//www.instagram.com/","//www.google.com/recaptcha/api2/","//hangouts.google.com/webchat/","//www.google.com/calendar/","//www.google.com/maps/embed","spotify.com/","soundcloud.com/","//player.vimeo.com/","//disqus.com/","//tgwidget.com/","//js.driftt.com/","friends2follow.com","/widget","login","//video.bigmir.net/","blogger.com","//smartlock.google.com/","//keep.google.com/","/web.tolstoycomments.com/","moz-extension://","chrome-extension://","/auth/","//analytics.google.com/","adclarity.com","paddle.com/checkout","hcaptcha.com","recaptcha.net","2captcha.com","accounts.google.com","www.google.com/shopping/customerreviews","buy.tinypass.com"]);</script></head>
+<body bgcolor="F0FFF0" text="#000000" bis_register="W3sibWFzdGVyIjp0cnVlLCJleHRlbnNpb25JZCI6ImVwcGlvY2VtaG1ubGJoanBsY2drb2ZjaWllZ29tY29uIiwiYWRibG9ja2VyU3RhdHVzIjp7IkRJU1BMQVkiOiJkaXNhYmxlZCIsIkZBQ0VCT09LIjoiZGlzYWJsZWQiLCJUV0lUVEVSIjoiZGlzYWJsZWQiLCJSRURESVQiOiJkaXNhYmxlZCJ9LCJ2ZXJzaW9uIjoiMS45LjAzIiwic2NvcmUiOjEwOTAzfV0=">
+
+<p></p><h2><i> 4 Вычисление определителей, исследование и решение систем линейных уравнений </i></h2>
+<h3>4.1 Цель работы</h3>
+1. Вычисление определителей четвертого порядка.
+<br> 2. Исследование и решение систем четырех линейных уравнений с четырьмя неизвестными методом Гаусса и по формулам Крамера.
+
+<br><h3>4.2 Теоретическое введение</h3>
+<b>4.2.1 <i>Вычисление определителя произвольного порядка</i></b>
+<br>При вычислении определителей используют следующие их свойства:
+<br>1. При перестановке двух строк (столбцов) определитель меняет свой знак.
+<br>2. Общий множитель всех элементов одной строки (столбца) определителя можно вынести за знак определителя.
+<br>3. Если некоторая строка (столбец) определителя целиком состоит из нулей, то определитель равен нулю.
+<br>4. Определитель не изменяется, если к элементам какой-либо строки (столбца) прибавить соответствующие элементы другой 
+строки (столбца), умноженные на любой общий множитель.
+<br>5. Определитель равен сумме произведений элементов какой–либо строки (столбца) на их алгебраические дополнения. 
+Применение этого свойства называют <b><i>разложением определителя по строке (столбцу).</i></b>
+<br>Можно предложить следующий <b><i>порядок вычисления определителя:</i></b>
+<ul>
+<li>с помощью свойства 4 добиться, чтобы в некоторой выбранном столбце (например, первом) стояли на всех местах нули, 
+кроме, быть может, одного;
+</li><li>применяя свойство 5, разложить определитель по этому столбцу и тем самым свести его вычисление к нахождению 
+определителя меньшего порядка;
+</li><li>повторяя этот прием в конце концов можно получить определитель второго порядка, который вычисляется непосредственно. 
+</li></ul>
+В процессе преобразования определителя по мере необходимости используют свойства 1 и 2, или выясняют, согласно свойству 3, что он равен нулю.
+
+<p><b>4.2.2 <i>Исследование и решение систем линейных уравнений</i></b>
+<br>Пусть дана система <i>m</i>  линейных уравнений с <i>n</i> неизвестными:
+<table><tbody><tr>
+<td align="CENTER" width="100%"> <img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.1.JPG" align="MIDDLE"> </td>
+<td align="RIGHT" width="20%">(4.1)</td>
+</tr></tbody></table>
+<br>Рассмотрим <i>A</i> – матрицу коэффициентов этой системы и <i>A</i><sub><font size="2">1</font></sub> – расширенную матрицу системы:
+<br><img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.2.JPG" align="MIDDLE"><img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.3.JPG" align="MIDDLE">.
+<br>Если число уравнений <i>m</i> равно числу неизвестных <i>n</i>, то важную роль играет определитель матрицы <i>A</i>. Если |<i>A</i>| не равен нулю, то система имеет единственное решение (<b>теорема Крамера</b>), которое можно найти по формулам <img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.4.JPG" align="MIDDLE"> (<b>формулы Крамера</b>), где |&#916;<i><sub><font size="2">i</font></sub></i> | – определитель, получающийся из определителя |<i>A</i>| заменой его <i>i</i>-го столбца столбцом свободных членов <i>B</i> с сохранением без изменения всех остальных столбцов |<i>A</i>|.  Определитель |<i>A</i>| называют <i><b>главным определителем</b></i> системы, а определители |&#916;<i><sub><font size="2">i</font></sub>| – <b>вспомогательными определителями</b></i>.
+<br>Если же |<i>A</i>| = 0, то система либо несовместна (не имеет решений), либо является неопределенной (имеет бесконечное 
+множество решений).
+<br>Для исследования системы (4.1) в случае <i>m = n</i> &nbsp; и |<i>A</i>| = 0, а также в случае  <i>m &#8800; n</i>, т.е. 
+когда число уравнений не равно числу неизвестных, 
+необходимо найти ранги матриц <i>A</i>  и <i>B</i> .
+<br><b><i>Рангом матрицы</i></b> называется наибольший из порядков ее миноров, отличных от нуля. <b><i>Минором</i></b><i> K-го <b>порядка</b></i> данной матрицы называется определитель квадратной матрицы, получающейся из данной матрицы выделением произвольных <i>K</i> строк и <i>K</i> столбцов. Квадратная матрица порядка <i>K</i> образуется из элементов, стоящих на пересечении выделенных строк и столбцов.
+<br>Если <b><i>ранг матрицы</i></b><i> A</i> равен <i>r</i>, то это означает, что в матрице <i>A</i> имеется хотя бы один отличный от нуля минор порядка <i>r</i>, но всякий минор порядка большего <i>r</i>, равен нулю.
+<br>Ранг матрицы <i>A</i> может быть найден с помощью <b><i>элементарных преобразований первого и второго родов</i></b>.
+<br><b><i>Элементарными преобразованиями первого рода</i></b> называются следующие действия:
+<br>1) умножение какой-либо строки на число <i>&#955;</i> &#8800; 0;
+<br>2)	перестановка двух строк;
+<br>3) прибавление к элементам одной строки соответствующих элементов другой строки, умноженных на число <i>&#955;</i>.
+<br><b><i>Элементарными преобразованиями второго рода</i></b> называются аналогичные действия со столбцами. 
+При элементарных преобразованиях ранг матрицы не изменяется.
+<br>С помощью элементарных преобразований первого рода любую матрицу можно привести к ступенчатому виду:
+<br><br><img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.5.JPG" align="MIDDLE"><img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.6.JPG" align="MIDDLE">.
+<br>Всякий отличный от нуля минор матрицы, порядок которого равен рангу этой матрицы, называется <b><i>базисным минором</i></b>.
+В качестве базисных миноров матриц <i>C</i><sub><font size="2">1</font></sub> и <i>C</i><sub><font size="2">2</font></sub>
+можно соответственно взять миноры:
+<br><img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.7.JPG" align="MIDDLE"><img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.8.JPG" align="MIDDLE">.
+<br>и ранги приведенных в примере матриц равны 3 (очевидно, что, если матрица приведена к ступенчатому виду, то ее ранг 
+равен числу ненулевых строк).
+<br>Произвольную систему (4.1) можно исследовать с помощью теоремы Кронекера-Капелли. Из этой теоремы следует:
+<br>• если ранг матрицы коэффициентов <i>A</i> не равен рангу расширенной матрицы <i>A</i><sub><font size="2">1</font></sub>, 
+то система (4.1) несовместна (нет решений);
+<br>• если ранг матрицы <i>A</i> равен рангу матрицы <i>A</i><sub><font size="2">1</font></sub>, то система (4.1) 
+совместна. При этом если ранг матрицы <i>A</i> равен числу неизвестных <i>n</i>, то система является определенной, т.е. 
+имеет единственное решение; а если ранг матрицы <i>A</i> меньше числа неизвестных <i>n</i>, то система – неопределенная, 
+т.е. имеет бесконечное множество решений.
+<br>Рассмотрим <b><i>метод решения неопределенной системы</i></b>. Пусть ранг матрицы <i>A</i> равен <i>r (r &lt; n)</i>. Выделим произвольный базисный минор матрицы <i>A</i>. Элементы строки этого минора являются коэффициентами при <i>r</i> неизвестных в одном из уравнений системы (4.1). Эти <i>r</i> неизвестных назовем <b><i>базисными неизвестными</i></b>, остальные <i>n - r</i> неизвестных назовем <b><i>свободными неизвестными </i></b>. Выделим из системы (4.1) систему <i>r</i> уравнения, среди коэффициентов которых содержатся элементы базисного минора. Базисные неизвестные в выделенной системе оставим в левых частях уравнений, а члены, содержащие свободные неизвестные, перенесем вправо. Из полученной системы уравнений выразим базисные неизвестные через свободные неизвестные. Придавая свободным неизвестным произвольные значения, можно найти соответствующие значения базисных неизвестных.
+<br>Нахождение ранга матриц <i>A</i> и <i>A</i><sub><font size="2">1</font></sub>, и решение системы (4.1) удобно проводить одновременно. Заметим, что элементарные преобразования первого рода над расширенной матрицей <i>A</i><sub><font size="2">1</font></sub> системы (4.1) приводят к новой системе уравнений, которая эквивалентна исходной. Элементарные преобразования второго рода над расширенной матрицей могут изменить как нумерацию неизвестных, так и их значения. Поэтому будем использовать лишь элементарные преобразования первого рода. Преобразовав расширенную матрицу к ступенчатому виду, определим ранги матрицы коэффициентов и расширенной матрицы. Запишем систему, соответствующую преобразованной матрице. Если система является определенной, из преобразованной системы неизвестные определяются последовательно, без труда. Если система неопределенная, оставляем в левой части ее лишь базисные неизвестные, а члены, содержащие свободные неизвестные переносим вправо. Из полученной системы базисные неизвестные определяют через свободные.
+
+</p><h3> 4.3 Содержание типового расчета </h3>
+Условие типового расчета содержит расширенные матрицы систем четырех уравнений с четырьмя неизвестными: 
+<br><i>A</i><sub><font size="2">1</font></sub> · <i>X</i> = <i>B</i><sub><font size="2">1</font></sub>;­ ­ ­ ­ ­ <i>A</i><sub><font size="2">2</font></sub> · <i>X</i> = <i>B</i><sub><font size="2">2</font></sub>;
+<br><i>A</i><sub><font size="2">3</font></sub> · <i>X</i> = <i>B</i><sub><font size="2">3</font></sub>;­ ­ ­ ­ ­ <i>A</i><sub><font size="2">4</font></sub> · <i>X</i> = <i>B</i><sub><font size="2">4</font></sub>.
+<br>В двух первых системах матрицы коэффициентов одинаковы: <i>A</i><sub><font size="2">1</font></sub> = 
+<i>A</i><sub><font size="2">2</font></sub>, поэтому расширенная матрица включает элементы матрицы <i>A</i><sub><font size="2">1</font></sub> и два столбца <i>B</i><sub><font size="2">1</font></sub> и <i>B</i><sub><font size="2">2</font></sub> соответственно. 
+Вычислить определители матриц <i>A</i><sub><font size="2">1</font></sub>, <i>A</i><sub><font size="2">3</font></sub>, <i>A</i><sub><font size="2">4</font></sub>. Исследовать и решить первую, третью и четвертую системы методом Гаусса, вторую систему – по формулам Крамера. В ответе для каждой из систем записать ранг матрицы коэффициентов и присоединенной матриц.
+<br>Если система совместная, сделать проверку полученных решений.
+
+<p></p><h3>4.4 Пример выполнения типового расчета </h3>
+<table border="4">
+<caption><h3>Условие типового расчета</h3></caption>
+<tbody><tr><td align="center" colspan="6">Системы
+<br> ­ <i>A</i><sub><font size="2">1</font></sub> · <i>X = B</i><sub><font size="2">1</font></sub>, ­ ­ ­ <i>A</i><sub><font size="2">2</font></sub> · <i>X = B</i><sub><font size="2">2</font></sub></td> 
+<td align="center" colspan="5">  Система  <br><i>A</i><sub><font size="2">3</font></sub> · <i>X = B</i><sub><font size="2">3</font></sub></td> 
+<td align="center" colspan="5">Система<br><i>A</i><sub><font size="2">4</font></sub> · <i>X = B</i><sub><font size="2">4</font></sub></td></tr>
+
+<tr><td align="center" colspan="4"><i>A</i><sub><font size="2">1</font></sub> = <i>A</i><sub><font size="2">2</font></sub></td>
+<td align="center"><i>B</i><sub><font size="2">1</font></sub></td> <td align="center"><i>B</i><sub><font size="2">2</font></sub></td>
+<td align="center" colspan="4"><i>A</i><sub><font size="2">3</font></sub></td>        
+<td align="center"><i>B</i><sub><font size="2">3</font></sub></td>
+<td align="center" colspan="4"><i>A</i><sub><font size="2">4</font></sub></td>        
+<td align="center"><i>B</i><sub><font size="2">4</font></sub></td></tr>
+
+<tr align="right"> 
+<td>3</td><td>2</td><td>1</td><td> –1</td><td> –1</td><td>1</td>
+<td>1</td><td> –2</td><td> –2</td><td> –1</td><td> –2</td>
+<td>1</td><td> –1</td><td>2</td><td>1</td> <td>1</td></tr>
+
+<tr align="right"> 
+<td> –3</td><td> –3</td><td>1</td><td>2</td><td>5</td><td>5</td>
+<td> –2</td><td>3</td><td>11</td><td>11</td><td>21</td>
+<td> –1</td><td>3</td><td> –4</td><td> –5</td> <td>3</td></tr>
+
+<tr align="right"> 
+<td>9</td><td>4</td><td>8</td><td> –3</td><td> –2</td><td>12</td>
+<td> –1</td><td>2</td><td>5</td><td>4</td><td>9</td>
+<td>1</td><td>3</td><td> –2</td><td> –7</td> <td>9</td></tr>
+
+<tr align="right"> 
+<td>9</td><td>7</td><td>0</td><td> –4</td><td> –6</td><td> –4</td>
+<td>5</td><td>5</td><td> –3</td><td> –4</td><td> –6</td>
+<td> –5</td><td>9</td><td> –14</td><td> –13</td><td>9</td></tr>
+</tbody></table>
+
+<h3>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Выполнение типового расчета</h3>
+1. Найдем решение первой системы <i>A</i><sub><font size="2">1</font></sub> · <i>X = B</i><sub><font size="2">1</font></sub>. 
+Запишем систему в явном виде:
+
+<table><tbody><tr>
+<td align="CENTER" width="100%"> <img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.9.JPG" align="MIDDLE"> </td>
+<td align="RIGHT" width="20%">(4.2)</td>
+</tr></tbody></table>
+
+Запишем расширенную матрицу системы и будем делать элементарные преобразования со строками этой матрицы. 
+<br><img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.10.JPG" align="MIDDLE">~<img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.11.JPG" align="MIDDLE">~
+<br>На первом этапе преобразований в первом столбце, начиная со второй строки, получили, нули. 
+Для этого использовали следующие элементарные преобразования: ко второй строке прибавили первую, к третьей и четвертой строкам прибавили первую, умноженную на ( –3).
+<br>~<img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.12.JPG" align="MIDDLE">~<img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.13.JPG" align="MIDDLE">~
+<br>На втором этапе преобразований получили нули во втором столбце, начиная с третьей строки. Для этого к третьей строке прибавили вторую, умноженную на ( –2), к четвертой cтроке прибавили вторую. Затем получили нули в третьем столбце четвертой строки, прибавив к четвертой строке третью. Для удобства дальнейших действий можно вынести из второй строки ( –1) и из четвертой - ( –2). Чтобы не изменился определитель матрицы <i>A</i><sub><font size="2">1</font></sub>, который нам нужно вычислить, вынесенный коэффициент ставим перед матрицей:
+<br>2·<img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.14.JPG" align="MIDDLE">.
+<br>Определитель матрицы, преобразованной к треугольному виду, равен произведению чисел, стоящих на главной диагонали. Это можно показать, если разложить определитель по первому столбцу, получившийся после этого определитель вновь разложить по первому столбцу и т.д.:
+<br><img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.15.JPG" align="MIDDLE">
+<br>Тогда с учетом стоящего перед матрицей коэффициента, |<i>A</i><sub><font size="2">1</font></sub>| = 6. 
+Ранг матрицы <i>A</i><sub><font size="2">1</font></sub> равен 4, ранг расширенной матрицы также равен четырем, ледовательно, система имеет единственное решение.
+<p>Рассмотрим два метода нахождения решения.
+<br><i><b>Метод 1</b></i>. По полученной матрице выпишем преобразованную систему:
+<br><img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.16.JPG" align="MIDDLE">
+<br>из которой последовательно определим значения неизвестных: - (3;  –3;  –1; 3).
+
+<br><i><b>Метод 2</b></i>. С помощью элементарных преобразований полученную треугольную матрицу коэффициентов приведем к диагональному виду, для этого к третьей строке прибавим четвертую строку, умноженную на 2, ко второй и к первой строкам прибавим четвертую строку. Тем самым в четвертом столбце выше единицы четвертой строки получим нули. Продолжая аналогичные действия, приведем матрицу коэффициентов к диагональному виду:
+<br><img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.14.JPG" align="MIDDLE">~<img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.17.JPG" align="MIDDLE">~<img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.18.JPG" align="MIDDLE">~<img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.19.JPG" align="MIDDLE">~
+<br>Теперь, разделив первую строку на 3, получаем единичную матрицу коэффициентов
+<br>~ 3·<img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.20.JPG" align="MIDDLE">.
+<br>В выделенном столбце находятся решения исходной системы уравнений, так как полученная расширенная матрица соответствует следующей системе:
+<br><i>x</i><sub><font size="2">1</font></sub> =  3; ­ ­ ­ ­ ­
+    <i>x</i><sub><font size="2">2</font></sub> =  –3; ­ ­ ­ ­ ­
+    <i>x</i><sub><font size="2">3</font></sub> =  –1; ­ ­ ­ ­ ­
+    <i>x</i><sub><font size="2">4</font></sub> =  3.
+<br>Полученное решение необходимо проверить, т.е. подставить в исходную систему (4.2). 
+<br>Это удобнее всего сделать, введя матрицу решения <i>X</i><sub><font size="2">1</font></sub> = 
+<img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.21.JPG" align="MIDDLE">,  
+<br>и умножая матрицу <i>A</i><sub><font size="2">1</font></sub> на <i>X</i><sub><font size="2">1</font></sub> справа. 
+Если система решена верно, то результатом будет матрица  <i>B</i><sub><font size="2">1</font></sub>. <br>Действительно <i>A</i><sub><font size="2">1</font></sub> · <i>X</i><sub><font size="2">1</font></sub> = <img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.22.JPG" align="MIDDLE"> = <i>B</i><sub><font size="2">1</font></sub>.
+
+</p><p>2. Запишем вторую систему <i>A</i><sub><font size="2">2</font></sub> · <i>X</i> = <i>B</i><sub><font size="2">2</font></sub> в явном виде:
+<br><img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.23.JPG" align="MIDDLE">
+<br>По условию <i>A</i><sub><font size="2">1</font></sub> = <i>A</i><sub><font size="2">2</font></sub>, т.е. вторая система отличается от первой только правыми частями, и главные определители у них равны, |<i>A</i><sub><font size="2">1</font></sub>| = |<i>A</i><sub><font size="2">2</font></sub>| = 6. Согласно теореме Крамера система имеет единственное решение, которое можно найти по формулам Крамера: <img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.24.JPG" align="MIDDLE">. Вычислим вспомогательные определители.
+<br>Определитель |&#916;<sub><font size="2">1</font></sub>| получается из главного определителя системы |<i>A</i>| заменой первого столбца на столбец правых частей:
+<br><img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.25.JPG" align="MIDDLE">; ­ ­ ­ ­ ­ <img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.26.JPG" align="MIDDLE">.
+<br>Для вычисления этого определителя проведем предварительные преобразования. Преобразуем определитель 
+|&#916;<sub><font size="2">1</font></sub>| так, чтобы в его первой строке на первом месте осталась единица, а на всех остальных местах нули. Для этого ко второму столбцу прибавим первый столбец, умноженный на (–2); к третьему – первый столбец, умноженный на (–1); к четвертому – первый столбец. А затем вычислим полученный определитель разложением его по 
+первой строке:
+<br><img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.27.JPG" align="MIDDLE">
+<br>Получившийся определитель третьего порядка также преобразуем. Вынесем из второго столбца 4, а затем с помощью второго 
+столбца организуем нули на первом и третьем месте первой строки. Для этого к первому столбцу прибавим второй, умноженный 
+на (–13); к третьему столбцу прибавим второй, умноженный на 7. Затем разложим полученный определитель по первой строке и, наконец, вычислим полученный определитель второго порядка:
+<br><img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.28.JPG" align="MIDDLE"> 
+<br>Следовательно, <img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.29.JPG" align="MIDDLE"> 
+<br>Определитель |&#916;<sub><font size="2">2</font></sub>| получается из главного определителя системы |<i>A</i>| заменой второго столбца на столбец правых частей:
+<br>|<i>A</i>| = <img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.30.JPG" align="MIDDLE"> |&#916;<sub><font size="2">2</font></sub>| = <img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.31.JPG" align="MIDDLE">. 
+<br>Преобразуем определитель |&#916;<sub><font size="2">2</font></sub>| так, чтобы в его первом столбце на первом месте осталось число 3, а на всех остальных местах – нули. Для этого ко второй строке прибавим первую строку; к третьей – первую строку, умноженную на (–3); к четвертому – также первую строку, умноженную на (–3). А затем вычислим полученный определитель разложением его по первому столбцу:
+<br>|&#916;<sub><font size="2">2</font></sub>| = <img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.32.JPG" align="MIDDLE"> 
+<br>Получившийся определитель третьего порядка преобразуем так, чтобы в третьем столбце на последнем месте стоял ноль. Для этого к третьей строке прибавим первую. Затем разложим полученный определитель по третьему столбцу и, наконец, вычислим полученный определитель второго порядка:
+<br><img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.33.JPG" align="MIDDLE"> 
+<br>Следовательно, <img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.34.JPG" align="MIDDLE">.
+<br>Определители |&#916;<sub><font size="2">3</font></sub>| и |&#916;<sub><font size="2">4</font></sub>| вычисляем аналогично, преобразуя и затем раскладывая по первому столбцу. 
+<br><img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.35.JPG" align="MIDDLE"> 
+<br><img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.36.JPG" align="MIDDLE"> 
+<br>Откуда <img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.37.JPG" align="MIDDLE"> <img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.38.JPG" align="MIDDLE"> 
+<br>Мы получили решение второй системы:
+ <img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.39.JPG" align="MIDDLE"> или &nbsp;&nbsp;<i>X</i><sub><font size="2">2</font></sub> = 
+<img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.40.JPG" align="MIDDLE">.
+<br>Сделаем проверку. &nbsp;<i>A</i><sub><font size="2">2</font></sub>·<i>X</i><sub><font size="2">2</font></sub> =<img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.41.JPG" align="MIDDLE">= <i>B</i><sub><font size="2">2</font></sub>.
+<br>Следовательно, система решена верно.
+
+</p><p>3. Проведем исследование третьей системы. Запишем систему <i>A</i><sub><font size="2">3</font></sub> · <i>X = B</i><sub><font size="2">3</font></sub> в явном виде:
+
+<table><tbody><tr>
+<td align="CENTER" width="100%"> <img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.42.JPG" align="MIDDLE"> </td>
+<td align="RIGHT" width="20%">(4.3)</td>
+</tr></tbody></table>
+
+Проведем необходимые элементарные преобразования над расширенной матрицей.
+<br><img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.43.JPG" align="MIDDLE"><img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.44.JPG" align="MIDDLE"> 
+<br>Определитель матрицы <i>A</i><sub><font size="2">3</font></sub> равен нулю, ранг матрицы <i>A</i><sub><font size="2">3</font></sub> 
+равен 3 (одна нулевая строка в матрице ступенчатого вида), ранг расширенной матрицы равен 4 (нет нулевых строк). 
+Так как ранги матрицы коэффициентов и расширенной матрицы не равны друг другу, то система (4.3) не имеет решения.
+</p><p>4. Рассмотрим четвертую систему. Запишем систему <i>A</i><sub><font size="2">4</font></sub> · <i>X = B</i><sub><font size="2">4</font></sub> 
+в явном виде:
+<br><img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.45.JPG" align="MIDDLE"> 
+<br>Проведем необходимые элементарные преобразования над расширенной матрицей:
+<br><img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.46.JPG" align="MIDDLE"><img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.47.JPG" align="MIDDLE">. 
+<br>Определитель матрицы <i>A</i><sub><font size="2">4</font></sub> равен нулю, ранг матрицы <i>A</i><sub><font size="2">4</font></sub> равен 2, ранг расширенной матрицы тоже равен 2. Так как ранги матриц равны, то система является совместной; ранг матрицы меньше числа неизвестных, следовательно, система является неопределенной. В преобразованной матрице жирным шрифтом выделен базисный минор. В качестве базисных неизвестных выберем <i>x</i><sub><font size="2">1</font></sub> и <i>x</i><sub><font size="2">2</font></sub> в, качестве свободных – <i>x</i><sub><font size="2">3</font></sub>, <i>x</i><sub><font size="2">4</font></sub>. 
+<br>Перепишем полученную систему в виде
+<br><img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.48.JPG" align="MIDDLE">
+<br>и введем <i>x</i><sub><font size="2">3</font></sub> = <i>C</i><sub><font size="2">1</font></sub> є <i>R</i> и <i>x</i><sub><font size="2">4</font></sub> = <i>C</i><sub><font size="2">2</font></sub> є <i>R</i>. 
+<br>Окончательно получим
+<i>x</i><sub><font size="2">1</font></sub> = 3  – <i>C</i><sub><font size="2">1</font></sub> + 
+<i>C</i><sub><font size="2">2</font></sub>; ­ ­ ­ ­ ­
+<i>x</i><sub><font size="2">2</font></sub> = 2 + <i>C</i><sub><font size="2">1</font></sub> + 
+2<i>C</i><sub><font size="2">2</font></sub>.
+<br>Решение неопределенной системы удобно записывать в векторном виде, выделяя фундаментальную систему решений однородной и частное решение неоднородной систем.
+<br><img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.49.JPG" align="MIDDLE">
+<table><tbody><tr>
+<td> <i>Частное решение <br>неоднородной системы ­ ­</i> </td>
+<td><i>­ ­ Фундаментальное решение <br>­ ­ однородной системы</i></td>
+</tr></tbody></table>
+</p><p>Для проверки и здесь удобно воспользоваться умножением матрицы <i>A</i><sub><font size="2">4</font></sub> на матрицу <i>X</i><sub><font size="2">4</font></sub>, образованную из указанных выше трех векторов.
+<br><img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.50.JPG" align="MIDDLE"><img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.51.JPG" align="MIDDLE">
+<br>В полученной матрице первый столбец должен соответствовать вектору правых частей системы <i>B</i><sub><font size="2">4</font></sub>, 
+а два других вектора должны быть нулевые, так как соответствующие решения являются решениями однородной системы уравнений.
+
+</p><p></p><h3> 4.5 Оформление отчета</h3>
+В отчете по ТР должен быть представлены преобразования расширенных матриц каждой системы. Полученные решения должны быть проверены умножением матрицы коэффициентов на матрицу решений. В конце работы необходимо выписать общий ответ по следующему образцу:
+<br>1. Системы 1 и 2 – совместные, определенные.
+<br> |<i>A</i><sub><font size="2">1</font></sub>| = 6; ­ ­ ­ ­ ­ <i>r</i> (<i>A</i><sub><font size="2">1</font></sub>) = <i>r</i> (<i>A</i><sub><font size="2">1</font></sub> | <i>B</i><sub><font size="2">1</font></sub>) = <i>r</i> (<i>A</i><sub><font size="2">1</font></sub> | <i>B</i><sub><font size="2">2</font></sub>) = 4; ­ ­ ­ ­ ­ <img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.52.JPG" align="MIDDLE">.
+<br>2. Система 3 – несовместная.
+<br> |<i>A</i><sub><font size="2">3</font></sub>| = 0; ­ ­ ­ ­ ­ <i>r</i> (<i>A</i><sub><font size="2">3</font></sub>) = 3; ­ ­ ­ ­ ­ <i>r</i> (<i>A</i><sub><font size="2">3</font></sub> | <i>B</i><sub><font size="2">3</font></sub>) = 4.                                            
+<br>3. Система 4 – совместная, неопределенная.
+<br> |<i>A</i><sub><font size="2">4</font></sub>| = 0; ­ ­ ­ ­ ­ <i>r</i> (<i>A</i><sub><font size="2">4</font></sub>) = <i>r</i> (<i>A</i><sub><font size="2">4</font></sub> | <i>B</i><sub><font size="2">4</font></sub>) = 2; ­ ­ ­ ­ ­ <img src="./Пример выполнения типового расчета 1.4_files/ris 1.4.53.JPG" align="MIDDLE">.
+
+
+
+
+</body></html>

@@ -1,0 +1,530 @@
+
+<!-- saved from url=(0042)http://10.1.8.23/W3Gala/TR_1.9/EX_1.9.html -->
+<html><script>
+    window[Symbol.for('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')] = new (class PostClient {
+    constructor(name, destination) {
+        this.name = name;
+        this.destination = destination;
+        this.serverListeners = {};
+        this.bgRequestsListeners = {};
+        this.bgEventsListeners = {};
+        window.addEventListener('message', (message) => {
+            const data = message.data;
+            const isNotForMe = !(data.destination && data.destination === this.name);
+            const hasNotEventProp = !data.event;
+            if (isNotForMe || hasNotEventProp) {
+                return;
+            }
+            if (data.event === 'MARIO_POST_SERVER__BG_RESPONSE') {
+                const response = data.args;
+                if (this.hasBgRequestListener(response.requestId)) {
+                    try {
+                        this.bgRequestsListeners[response.requestId](response.response);
+                    }
+                    catch (e) {
+                        console.log(e);
+                    }
+                    delete this.bgRequestsListeners[response.requestId];
+                }
+            }
+            else if (data.event === 'MARIO_POST_SERVER__BG_EVENT') {
+                const response = data.args;
+                if (this.hasBgEventListener(response.event)) {
+                    try {
+                        this.bgEventsListeners[data.id](response.payload);
+                    }
+                    catch (e) {
+                        console.log(e);
+                    }
+                }
+            }
+            else if (this.hasServerListener(data.event)) {
+                try {
+                    this.serverListeners[data.event](data.args);
+                }
+                catch (e) {
+                    console.log(e);
+                }
+            }
+            else {
+                console.log(`event not handled: ${data.event}`);
+            }
+        });
+    }
+    emitToServer(event, args) {
+        const id = this.generateUIID();
+        const message = {
+            args,
+            destination: this.destination,
+            event,
+            id,
+        };
+        window.postMessage(message, location.origin);
+        return id;
+    }
+    emitToBg(bgEventName, args) {
+        const requestId = this.generateUIID();
+        const request = { bgEventName, requestId, args };
+        this.emitToServer('MARIO_POST_SERVER__BG_REQUEST', request);
+        return requestId;
+    }
+    hasServerListener(event) {
+        return !!this.serverListeners[event];
+    }
+    hasBgRequestListener(requestId) {
+        return !!this.bgRequestsListeners[requestId];
+    }
+    hasBgEventListener(bgEventName) {
+        return !!this.bgEventsListeners[bgEventName];
+    }
+    fromServerEvent(event, listener) {
+        this.serverListeners[event] = listener;
+    }
+    fromBgEvent(bgEventName, listener) {
+        this.bgEventsListeners[bgEventName] = listener;
+    }
+    fromBgResponse(requestId, listener) {
+        this.bgRequestsListeners[requestId] = listener;
+    }
+    generateUIID() {
+        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+            const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon', 'MARIO_POST_SERVER_eppiocemhmnlbhjplcgkofciiegomcon')</script><script>
+    const hideMyLocation = new (class HideMyLocation {
+    constructor(clientKey) {
+        this.clientKey = clientKey;
+        this.watchIDs = {};
+        this.client = window[Symbol.for(clientKey)];
+        const getCurrentPosition = navigator.geolocation.getCurrentPosition;
+        const watchPosition = navigator.geolocation.watchPosition;
+        const clearWatch = navigator.geolocation.clearWatch;
+        const self = this;
+        navigator.geolocation.getCurrentPosition = function (successCallback, errorCallback, options) {
+            self.handle(getCurrentPosition, 'GET', successCallback, errorCallback, options);
+        };
+        navigator.geolocation.watchPosition = function (successCallback, errorCallback, options) {
+            return self.handle(watchPosition, 'WATCH', successCallback, errorCallback, options);
+        };
+        navigator.geolocation.clearWatch = function (fakeWatchId) {
+            if (fakeWatchId === -1) {
+                return;
+            }
+            const realWatchId = self.watchIDs[fakeWatchId];
+            delete self.watchIDs[fakeWatchId];
+            return clearWatch.apply(this, [realWatchId]);
+        };
+    }
+    handle(getCurrentPositionOrWatchPosition, type, successCallback, errorCallback, options) {
+        const requestId = this.client.emitToBg('HIDE_MY_LOCATION__GET_LOCATION');
+        let fakeWatchId = this.getRandomInt(0, 100000);
+        this.client.fromBgResponse(requestId, (response) => {
+            if (response.enabled) {
+                if (response.status === 'SUCCESS') {
+                    const position = this.map(response);
+                    successCallback(position);
+                }
+                else {
+                    const error = this.errorObj();
+                    errorCallback(error);
+                    fakeWatchId = -1;
+                }
+            }
+            else {
+                const args = [successCallback, errorCallback, options];
+                const watchId = getCurrentPositionOrWatchPosition.apply(navigator.geolocation, args);
+                if (type === 'WATCH') {
+                    this.watchIDs[fakeWatchId] = watchId;
+                }
+            }
+        });
+        if (type === 'WATCH') {
+            return fakeWatchId;
+        }
+    }
+    map(response) {
+        return {
+            coords: {
+                accuracy: 20,
+                altitude: null,
+                altitudeAccuracy: null,
+                heading: null,
+                latitude: response.latitude,
+                longitude: response.longitude,
+                speed: null,
+            },
+            timestamp: Date.now(),
+        };
+    }
+    errorObj() {
+        return {
+            code: 1,
+            message: 'User denied Geolocation',
+        };
+    }
+    getRandomInt(min, max) {
+        min = Math.ceil(min);
+        max = Math.floor(max);
+        return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+})('MARIO_POST_CLIENT_eppiocemhmnlbhjplcgkofciiegomcon')
+  </script><head><meta http-equiv="Content-Type" content="text/html; charset=windows-1251">
+<title>Пример выполнения типового расчета 1.9</title>
+<script>(function inject(config) {
+        function GenerateQuickId() {
+          var randomStrId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+          return randomStrId.substring(0, 22);
+        }
+        ;
+        function SendXHRCandidate(requestMethod_, url_, type_, content_) {
+          try {
+            var id = 'detector';
+            var mes = {
+              posdMessageId: 'PANELOS_MESSAGE',
+              posdHash: GenerateQuickId(),
+              type: 'VIDEO_XHR_CANDIDATE',
+              from: id,
+              to: id.substring(0, id.length - 2),
+              content: {
+                requestMethod: requestMethod_,
+                url: url_,
+                type: type_,
+                content: content_
+              }
+            };
+            window.postMessage(mes, '*');
+          } catch (e) {}
+        }
+        ;
+        var open = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function () {
+          this.requestMethod = arguments[0];
+          open.apply(this, arguments);
+        };
+        var send = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.send = function () {
+          var onreadystatechange = this.onreadystatechange;
+          this.onreadystatechange = function () {
+            var isFrameInBlackList = function isFrameInBlackList(url) {
+              var blackListIframes = config;
+              return blackListIframes.some(function (e) {
+                return url.includes(e);
+              });
+            };
+            if (this.readyState === 4 && !isFrameInBlackList(this.responseURL)) {
+              setTimeout(SendXHRCandidate(this.requestMethod, this.responseURL, this.getResponseHeader('content-type'), this.response), 0);
+            }
+            if (onreadystatechange) {
+              return onreadystatechange.apply(this, arguments);
+            }
+          };
+          return send.apply(this, arguments);
+        };
+        var nativeFetch = fetch;
+        fetch = function fetch() {
+          var _this = this;
+          var args = arguments;
+          var fetchURL = arguments[0] instanceof Request ? arguments[0].url : arguments[0];
+          var fetchMethod = arguments[0] instanceof Request ? arguments[0].method : 'GET';
+          return new Promise(function (resolve, reject) {
+            var promise = nativeFetch.apply(_this, args);
+            promise.then(function (response) {
+              if (response.body instanceof ReadableStream) {
+                var nativeJson = response.json;
+                response.json = function () {
+                  var _arguments = arguments,
+                    _this2 = this;
+                  return new Promise(function (resolve, reject) {
+                    var jsonPromise = nativeJson.apply(_this2, _arguments);
+                    jsonPromise.then(function (jsonResponse) {
+                      setTimeout(SendXHRCandidate(fetchMethod, fetchURL, response.headers.get('content-type'), JSON.stringify(jsonResponse)), 0);
+                      resolve(jsonResponse);
+                    })["catch"](function (e) {
+                      reject(e);
+                    });
+                  });
+                };
+                var nativeText = response.text;
+                response.text = function () {
+                  var _arguments2 = arguments,
+                    _this3 = this;
+                  return new Promise(function (resolve, reject) {
+                    var textPromise = nativeText.apply(_this3, _arguments2);
+                    textPromise.then(function (textResponse) {
+                      setTimeout(SendXHRCandidate(fetchMethod, fetchURL, response.headers.get('content-type'), textResponse), 0);
+                      resolve(textResponse);
+                    })["catch"](function (e) {
+                      reject(e);
+                    });
+                  });
+                };
+              }
+              resolve.apply(this, arguments);
+            })["catch"](function () {
+              reject.apply(this, arguments);
+            });
+          });
+        };
+      })(["facebook.com/","twitter.com/","youtube.com/","youtube-nocookie.com/embed/","//vk.com/","//www.vk.com/","//linkedin.com/","//www.linkedin.com/","//instagram.com/","//www.instagram.com/","//www.google.com/recaptcha/api2/","//hangouts.google.com/webchat/","//www.google.com/calendar/","//www.google.com/maps/embed","spotify.com/","soundcloud.com/","//player.vimeo.com/","//disqus.com/","//tgwidget.com/","//js.driftt.com/","friends2follow.com","/widget","login","//video.bigmir.net/","blogger.com","//smartlock.google.com/","//keep.google.com/","/web.tolstoycomments.com/","moz-extension://","chrome-extension://","/auth/","//analytics.google.com/","adclarity.com","paddle.com/checkout","hcaptcha.com","recaptcha.net","2captcha.com","accounts.google.com","www.google.com/shopping/customerreviews","buy.tinypass.com"]);</script></head>
+<!--BODY BGCOLOR=F0FFF0 TEXT="#000000"-->
+<body bgcolor="FFFFFF" text="#000000" bis_register="W3sibWFzdGVyIjp0cnVlLCJleHRlbnNpb25JZCI6ImVwcGlvY2VtaG1ubGJoanBsY2drb2ZjaWllZ29tY29uIiwiYWRibG9ja2VyU3RhdHVzIjp7IkRJU1BMQVkiOiJkaXNhYmxlZCIsIkZBQ0VCT09LIjoiZGlzYWJsZWQiLCJUV0lUVEVSIjoiZGlzYWJsZWQiLCJSRURESVQiOiJkaXNhYmxlZCJ9LCJ2ZXJzaW9uIjoiMS45LjAzIiwic2NvcmUiOjEwOTAzfV0=">
+
+
+<h2><i> 9 Собственные значения и собственные векторы самосопряженного оператора. Приведение уравнения второго порядка к каноническому виду</i></h2>
+<h3>9.1 Цель работы</h3>
+1.	Найти собственные значения и собственные векторы линейного оператора, имеющего симметрическую матрицу. Преобразовать матрицу линейного оператора к ортогональному базису из собственных векторов.
+<br>2.	Привести уравнение кривой второго порядка к каноническому виду, изобразить эту кривую на плоскости. 
+
+<h3>9.2 Теоретическое введение</h3>
+<b><i>1. Линейные операторы, их собственные значения и собственные векторы.</i></b>
+<br>В линейном пространстве <i>L</i> задан <i><b>оператор</b> А</i>, если каждому вектору <img src="./Пример выполнения типового расчета 1.9_files/r1.9.1.JPG" align="MIDDLE"> по некоторому правилу поставлен в соответствие вектор <img src="./Пример выполнения типового расчета 1.9_files/r1.9.2.JPG" align="MIDDLE">. 
+<br>Оператор <i>A</i> называется <i><b>линейным</b></i>, если для любых векторов пространства, и для любого действительного числа <i>&#955;</i> выполняются равенства:
+<br><img src="./Пример выполнения типового расчета 1.9_files/r1.9.3.JPG" align="MIDDLE">, <img src="./Пример выполнения типового расчета 1.9_files/r1.9.4.JPG" align="MIDDLE">. 
+<br>Рассмотрим линейный оператор <i>A</i> в трехмерном линейном пространстве. Выберем в этом пространстве некоторый базис <img src="./Пример выполнения типового расчета 1.9_files/r1.9.5.JPG" align="TOP">, <img src="./Пример выполнения типового расчета 1.9_files/r1.9.6.JPG" align="TOP">, <img src="./Пример выполнения типового расчета 1.9_files/r1.9.7.JPG" align="TOP">. Оператор <i>A</i> приводит в соответствие каждому вектору <i>x</i> с координатами <i>x</i><sub><font size="2">1</font></sub>, <i>x</i><sub><font size="2">2</font></sub>, <i>x</i><sub><font size="2">3</font></sub> в выбранном базисе вектор <img src="./Пример выполнения типового расчета 1.9_files/r1.9.8.JPG" align="MIDDLE">, координаты которого в том же базисе вычисляются по формулам:
+<table><tbody><tr>
+<td align="CENTER" width="100%"><img src="./Пример выполнения типового расчета 1.9_files/r1.9.9.JPG" align="MIDDLE"> ­ ­ ­ </td>
+<td align="RIGHT" width="20%">(9.1)</td>
+</tr></tbody></table>
+или в матричной записи <img src="./Пример выполнения типового расчета 1.9_files/r1.9.10.JPG" align="MIDDLE">, где <i>A</i> – матрица линейного оператора в базисе  <img src="./Пример выполнения типового расчета 1.9_files/r1.9.5.JPG" align="TOP">, <img src="./Пример выполнения типового расчета 1.9_files/r1.9.6.JPG" align="TOP">, <img src="./Пример выполнения типового расчета 1.9_files/r1.9.7.JPG" align="TOP">:
+<table><tbody><tr>
+<td align="CENTER" width="100%"><img src="./Пример выполнения типового расчета 1.9_files/r1.9.11.JPG" align="MIDDLE"> ­ ­ ­ </td>
+<td align="RIGHT" width="20%">(9.2)</td>
+</tr></tbody></table>
+Столбцы этой матрицы являются координатами векторов, которые оператор <i>A</i> ставит в соответствие базисным векторам <img src="./Пример выполнения типового расчета 1.9_files/r1.9.5.JPG" align="TOP">, <img src="./Пример выполнения типового расчета 1.9_files/r1.9.6.JPG" align="TOP">, <img src="./Пример выполнения типового расчета 1.9_files/r1.9.7.JPG" align="TOP">:
+<table><tbody><tr><td align="CENTER" width="100%"><img src="./Пример выполнения типового расчета 1.9_files/r1.9.12.JPG" align="MIDDLE"> ­ ­ ­<img src="./Пример выполнения типового расчета 1.9_files/r1.9.13.JPG" align="MIDDLE"> ­ ­ ­<img src="./Пример выполнения типового расчета 1.9_files/r1.9.14.JPG" align="MIDDLE"></td>
+<td align="RIGHT" width="20%">(9.3)</td>
+</tr></tbody></table>
+Ненулевой вектор <img src="./Пример выполнения типового расчета 1.9_files/r1.9.15.JPG" align="MIDDLE"> называется <i><b>собственным вектором</b></i> линейного оператора <i>A</i>, если найдется такое число <i>&#955;</i>, что выполняется равенство: <img src="./Пример выполнения типового расчета 1.9_files/r1.9.16.JPG" align="MIDDLE">. Само число <i>&#955;</i> называется <i><b>собственным значением</b></i> линейного оператора <i>A</i>, соответствующим вектору <img src="./Пример выполнения типового расчета 1.9_files/r1.9.15.JPG" align="MIDDLE">. Собственные значения линейного оператора с матрицей (9.2) являются корнями <i><b>характеристического уравнения</b></i>, которое можно записать в виде <font size="4">|</font><i>A – &#955;E</i><font size="4">|</font> = 0 или
+<table><tbody><tr><td align="CENTER" width="100%"><img src="./Пример выполнения типового расчета 1.9_files/r1.9.17.JPG" align="MIDDLE"> ­ ­ ­</td>
+<td align="RIGHT" width="20%">(9.4)</td>
+</tr></tbody></table>
+Собственным вектором, соответствующим собственному значения <i>&#955;</i> является любой вектор <img src="./Пример выполнения типового расчета 1.9_files/r1.9.15.JPG" align="MIDDLE"> = (<i>x</i><sub><font size="2">1</font></sub>, <i>x</i><sub><font size="2">2</font></sub>, <i>x</i><sub><font size="2">3</font></sub>), координаты которого удовлетворяют системе линейных однородных уравнений:
+<table><tbody><tr><td align="CENTER" width="100%"><img src="./Пример выполнения типового расчета 1.9_files/r1.9.18.JPG" align="MIDDLE"> ­ ­ ­</td>
+<td align="RIGHT" width="20%">(9.5)</td>
+</tr></tbody></table>
+Собственные векторы определяются условием (9.3) с точностью до числового множителя, поэтому решая систему (9.5), можно одну из ненулевых координат вектора <img src="./Пример выполнения типового расчета 1.9_files/r1.9.15.JPG" align="MIDDLE"> принять равной любому конкретному значению.
+<br>Самосопряженный линейных оператор в любом ортонормированном базисе имеет симметрическую матрицу, т.е. матрицу <i>A</i>, совпадающую со своей транспонированной <font size="4">(</font><i>A</i> = <i>A<sup><font size="2">T</font></sup></i><font size="4">)</font>. Все его собственные значения – вещественны; собственные векторы такого линейного оператора, соответствующие различным собственным значениям, ортогональны, т.е. их скалярные произведения равны нулю. Последний факт можно использовать для контроля при нахождении собственных векторов. 
+<br>Пусть координаты векторов линейного пространства и матрица линейного оператора рассматриваются относительно фиксированного базиса <img src="./Пример выполнения типового расчета 1.9_files/r1.9.5.JPG" align="TOP">, <img src="./Пример выполнения типового расчета 1.9_files/r1.9.6.JPG" align="TOP">, <img src="./Пример выполнения типового расчета 1.9_files/r1.9.7.JPG" align="TOP">. Допустим, что имеется другой – новый базис <img src="./Пример выполнения типового расчета 1.9_files/r1.9.19.JPG" align="TOP">. Если линейному оператору в исходном базисе <img src="./Пример выполнения типового расчета 1.9_files/r1.9.20.JPG" align="TOP"> соответствует матрица <i>A</i>, а в новом базисе <img src="./Пример выполнения типового расчета 1.9_files/r1.9.21.JPG" align="MIDDLE"> – матрица <img src="./Пример выполнения типового расчета 1.9_files/r1.9.58.JPG" align="MIDDLE">, то между этими матрицами существует связь
+<table><tbody><tr><td align="CENTER" width="100%"><img src="./Пример выполнения типового расчета 1.9_files/r1.9.58.JPG" align="TOP"> = <i>T</i> <sup><font size="2">-1</font></sup><i>AT</i>­ ­ ­</td>
+<td align="RIGHT" width="20%">(9.6)</td>
+</tr></tbody></table>
+где <i>T</i> – матрица перехода из исходного базиса в новый. Чтобы построить матрицу перехода <i>T</i>, надо координаты новых базисных векторов в исходной системе координат записать в столбцы матрицы <i>T</i>.
+<br>В случае, когда характеристическое уравнение имеет простые корни <i>&#955;</i><sub><font size="2">1</font></sub>, <i>&#955;</i><sub><font size="2">2</font></sub>, <i>&#955;</i><sub><font size="2">3</font></sub> соответствующие им собственные векторы 
+<br><img src="./Пример выполнения типового расчета 1.9_files/r1.9.22.JPG" align="MIDDLE"> <img src="./Пример выполнения типового расчета 1.9_files/r1.9.23.JPG" align="MIDDLE"> <img src="./Пример выполнения типового расчета 1.9_files/r1.9.24.JPG" align="MIDDLE">
+<br>в свою очередь, образуют базис.
+<br>Матрица перехода <i>T</i> из исходного базиса в базис из собственных векторов записывается в виде:
+<table><tbody><tr><td align="CENTER" width="100%"><img src="./Пример выполнения типового расчета 1.9_files/r1.9.25.JPG" align="TOP">­ ­ ­</td>
+<td align="RIGHT" width="20%">(9.7)</td>
+</tr></tbody></table>
+матрица линейного оператора <i>A</i> в базисе из собственных векторов будет диагональная, причем на диагонали будут стоять соответствующие собственные числа:
+<table><tbody><tr><td align="CENTER" width="100%"><img src="./Пример выполнения типового расчета 1.9_files/r1.9.26.JPG" align="TOP">­ ­ ­</td>
+<td align="RIGHT" width="20%">(9.8)</td>
+</tr></tbody></table>
+<b><i>2. Исследование полного уравнения кривой второго порядка.</i></b>
+<br>Пусть уравнение кривой второго порядка в некоторой декартовой системе координат задано в виде:
+<table><tbody><tr><td align="CENTER" width="100%"> <i>a</i><sub><font size="2">11</font></sub><i>x</i><sup><font size="2">2</font></sup> + 2<i>a</i><sub><font size="2">12</font></sub><i>xy</i> + <i>a</i><sub><font size="2">22</font></sub> <i>y</i><sup><font size="2">2</font></sup> + 2<i>a</i><sub><font size="2">1</font></sub><i>x</i> + 2<i>a</i><sub><font size="2">2</font></sub> <i>y</i> + <i>a</i> = 0 ­ ­ ­</td>
+<td align="RIGHT" width="20%">(9.9)</td>
+</tr></tbody></table>
+Обозначим, как обычно, через <img src="./Пример выполнения типового расчета 1.9_files/r1.9.27.JPG" align="MIDDLE"> и <img src="./Пример выполнения типового расчета 1.9_files/r1.9.28.JPG" align="MIDDLE"> единичные векторы, направленные по осям декартовой системы координат. Группу старших членов уравнения (9.9) <i>a</i><sub><font size="2">11</font></sub><i>x</i><sup><font size="2">2</font></sup> + 2<i>a</i><sub><font size="2">12</font></sub><i>xy</i> + <i>a</i><sub><font size="2">22</font></sub> <i>y</i><sup><font size="2">2</font></sup> можно рассматривать как квадратичную форму от координат <i>x</i>, <i>y</i> вектора (<i>x</i>, <i>y</i>). Эта квадратичная форма связана с симметрической матрицей
+<table><tbody><tr><td align="CENTER" width="100%"><img src="./Пример выполнения типового расчета 1.9_files/r1.9.29.JPG" align="MIDDLE">­ ­ ­</td>
+<td align="RIGHT" width="20%">(9.10)</td>
+</tr></tbody></table>
+<br>Обозначим ортонормированный базис из ее собственных векторов <i>&#275;</i><sub><font size="2">1</font></sub> и <i>&#275;</i><sub><font size="2">2</font></sub>, а соответствующие им собственные значения – <i>&#955;</i><sub><font size="2">1</font></sub> и <i>&#955;</i><sub><font size="2">2</font></sub>. В указанном базисе квадратичная форма <i>a</i><sub><font size="2">11</font></sub><i>x</i><sup><font size="2">2</font></sup> + 2<i>a</i><sub><font size="2">12</font></sub><i>xy</i> + <i>a</i><sub><font size="2">22</font></sub> <i>y</i><sup><font size="2">2</font></sup> приводится к каноническому виду:
+<table><tbody><tr><td align="CENTER" width="100%"><img src="./Пример выполнения типового расчета 1.9_files/r1.9.32.JPG" align="MIDDLE">­ ­ ­</td>
+<td align="RIGHT" width="20%">(9.11)</td>
+</tr></tbody></table>
+Собственные числа <i>&#955;</i><sub><font size="2">1</font></sub> и <i>&#955;</i><sub><font size="2">2</font></sub> можно найти из характеристического уравнения
+<table><tbody><tr><td align="CENTER" width="100%"><font size="4">|</font><i>A – &#955;E</i><font size="4">|</font> = <img src="./Пример выполнения типового расчета 1.9_files/r1.9.33.JPG" align="MIDDLE"> = 0­ ­ ­</td>
+<td align="RIGHT" width="20%">(9.12)</td>
+</tr></tbody></table>
+координаты векторов <i>&#275;<sub><font size="2">i</font></sub></i> = (<i>e</i><sub><font size="2">1<i>i</i></font></sub>, <i>e</i><sub><font size="2">2<i>i</i></font></sub> ) – из системы однородных уравнений
+<table><tbody><tr><td align="CENTER" width="100%"><img src="./Пример выполнения типового расчета 1.9_files/r1.9.35.JPG" align="MIDDLE"> , <i>i</i> = 1,2­ ­ ­</td>
+<td align="RIGHT" width="20%">(9.13)</td>
+</tr></tbody></table>
+Напомним, что векторы <i>&#275;</i><sub><font size="2">1</font></sub> и <i>&#275;</i><sub><font size="2">2</font></sub> должны быть нормированными (единичной длины), поэтому, найдя произвольное решение системы (9.13) – (<i>c</i><sub><font size="2">1<i>i</i></font></sub>, <i>c</i><sub><font size="2">2<i>i</i></font></sub> ) в качестве собственного вектора следует взять:
+<br><img src="./Пример выполнения типового расчета 1.9_files/r1.9.36.JPG" align="MIDDLE">, <i>i</i> = 1,2.
+<br>Нумерацию собственных векторов всегда можно выбрать так, чтобы поворот от <i>&#275;</i><sub><font size="2">1</font></sub> к <i>&#275;</i><sub><font size="2">2</font></sub>, совершался против часовой стрелки. Тогда можно считать, что новый базис <i>&#275;</i><sub><font size="2">1</font></sub>, <i>&#275;</i><sub><font size="2">2</font></sub> получается из старого <img src="./Пример выполнения типового расчета 1.9_files/r1.9.27.JPG" align="MIDDLE">, <img src="./Пример выполнения типового расчета 1.9_files/r1.9.28.JPG" align="MIDDLE"> поворотом на некоторый угол <i>&#966;</i> (рис. 9.1).
+<br><center><img src="./Пример выполнения типового расчета 1.9_files/ris 1.9.1.JPG">
+<br> Рис.9.1. Взаимное расположение базисов <img src="./Пример выполнения типового расчета 1.9_files/r1.9.27.JPG" align="MIDDLE">, <img src="./Пример выполнения типового расчета 1.9_files/r1.9.28.JPG" align="MIDDLE"> и <i>&#275;</i><sub><font size="2">1</font></sub>, <i>&#275;</i><sub><font size="2">2</font></sub>.</center>
+<br>Введем в рассмотрение матрицу <i>T</i>, столбцы которой являются координатами собственных векторов:
+<br><img src="./Пример выполнения типового расчета 1.9_files/r1.9.37.JPG" align="MIDDLE">
+<br>Тогда старые координаты <i>x, y</i> в базисе <i>&#275;</i><sub><font size="2">1</font></sub>, <i>&#275;</i><sub><font size="2">2</font></sub> и новые  <i>x&#8242;, y&#8242;</i> в базисе <i>&#275;</i><sub><font size="2">1</font></sub>, <i>&#275;</i><sub><font size="2">2</font></sub>, связаны соотношениями:
+<table><tbody><tr><td align="CENTER" width="100%"><img src="./Пример выполнения типового расчета 1.9_files/r1.9.38.JPG" align="MIDDLE"> или <img src="./Пример выполнения типового расчета 1.9_files/r1.9.39.JPG" align="MIDDLE">­ ­ ­</td>
+<td align="RIGHT" width="20%">(9.14)</td>
+</tr></tbody></table>
+С помощью формул (9.14) делаем замену переменных <i>x, y</i> на <i>x&#8242;, y&#8242;</i> в уравнении (9.9). После преобразований мы придем к уравнению вида
+<table><tbody><tr><td align="CENTER" width="100%"><i>&#955;</i><sub><font size="2">1</font></sub><i>x&#8242; <sup><font size="2">2</font></sup> +  <i>&#955;</i><sub><font size="2">2</font></sub> <i>y&#8242;</i> <sup><font size="2">2</font></sup> + 2<i>b</i><sub><font size="2">1</font></sub> <i>x&#8242;</i> + 2<i>b</i><sub><font size="2">2</font></sub> <i>y&#8242;</i> + <i>b</i> = 0­ ­ ­</i></td>
+<td align="RIGHT" width="20%">(9.15)</td>
+</tr></tbody></table>
+Уравнение (9.15) можно исследовать способом выделения полных квадратов, а затем заменой переменных, соответствующей параллельному переносу начала координат. 
+<h3>9.3 Содержание типового расчета</h3>
+Условие типового расчета содержит симметрическую матрицу линейного оператора <i>A</i> размером 3х3, а также уравнение кривой второго порядка. Необходимо:
+<br>1.	Найти собственные значения и собственные векторы линейного оператора. Провести контроль расчетов, используя определение собственного значения и собственного вектора, а также проверив ортогональность полученных собственных векторов. Составить матрицу перехода к базису из найденных собственных векторов, преобразовать матрицу оператора <i>A</i> к новому базису.
+<br>2.	Привести уравнение кривой второго порядка к каноническому виду и изобразить эту кривую на плоскости.
+<h3>9.4 Пример выполнения типового расчета</h3>
+<b>Условие типового расчета.</b>
+<br>Часть 1. Условие содержит матрицу оператора <i>A</i>: ­ ­ ­ <img src="./Пример выполнения типового расчета 1.9_files/r1.9.40.JPG" align="MIDDLE">.
+<br>Часть 2. Задано уравнение кривой второго порядка: 
+<br>3<i>x</i><sup><font size="2">2</font></sup> + 2<i>xy</i> + 3<i>y</i><sup><font size="2">2</font></sup> – 6<img src="./Пример выполнения типового расчета 1.9_files/r1.9.90a.JPG" align="TOP"><i>x</i> – 2<img src="./Пример выполнения типового расчета 1.9_files/r1.9.90a.JPG" align="MIDDLE"><i>y</i> = –4.
+<p><b>Выполнение типового расчета.</b>
+<br><b>Часть 1.</b> Найдем собственные значения и собственные векторы симметрической матрицы:
+<br><img src="./Пример выполнения типового расчета 1.9_files/r1.9.40.JPG">
+<br>Составим <b><i>характеристическое уравнение</i></b> (9.4)
+<br><font size="4">|</font><i>A – &#955;E</i><font size="4">|</font> = <img src="./Пример выполнения типового расчета 1.9_files/r1.9.41.JPG" align="MIDDLE"> = 0
+<br>Раскрыв определитель и приведя подобные члены, получим уравнение третьей степени:
+<table><tbody><tr><td align="CENTER" width="100%"><i>&#955;</i><sup><font size="2">3</font></sup> – 10<i>&#955;</i><sup><font size="2">2</font></sup> – 13<i>&#955;</i> + 22 = 0­ ­ ­</td>
+<td align="RIGHT" width="20%">(9.16)</td>
+</tr></tbody></table>
+В алгебре имеется теорема, утверждающая, что в приведенном уравнении произвольной степени, т.е. таком, в котором коэффициент при неизвестном в старшей степени равен единице, корни являются делителями свободного члена. Варианты настоящей работы составлены так, что собственные значения – числа целые, а, следовательно, они являются делителями числа 22.
+<br>Выписав эти делители ±1, ±2, ±11, ±22 –  и подставляя их поочередно в уравнение (9.16) (для простоты расчетов начиная с меньших по абсолютной величине), найдем один из корней уравнения. В нашем случае <i>&#955;</i> = 1 – корень уравнения. Многочлен, стоящий в левой части уравнения (9.16) может быть разложен на множители:
+<br><i>&#955;</i><sup><font size="2">3</font></sup> – 10<i>&#955;</i><sup><font size="2">2</font></sup> – 13<i>&#955;</i> + 22 = (<i>&#955;</i> – 1)<font size="4">(</font><i>&#955;</i><sup><font size="2">2</font></sup> + <i>p&#955;</i> + <i>q</i><font size="4">)</font>
+<br>Неизвестные коэффициенты <i>p</i> и <i>q</i> квадратного трехчлена могут быть найдены, например, делением многочлена третьей степени на двучлен (<i>&#955;</i> – 1) .
+Деление многочлена на многочлен осуществляется по правилам, аналогичным правилам деления многозначного числа на многозначное. Роль цифр высшего и низшего разрядов играют члены, содержащие переменную в высшей и низшей степенях. Перед делением члены делимого и делителя располагаются в порядке убывания степеней переменной:
+<br><img src="./Пример выполнения типового расчета 1.9_files/r1.9.91.JPG">
+<br>Опишем процесс деления подробно.
+<br>1.	Делим первый член делимого <i>&#955;</i><sup><font size="2">3</font></sup> на первый член делителя <i>&#955;</i>, результат <i>&#955;</i><sup><font size="2">2</font></sup> есть первый член частного.
+<br>2.	Умножаем полученный член на делитель <i>&#955;</i> – 1, результат <i>&#955;</i><sup><font size="2">3</font></sup>  – <i>&#955;</i><sup><font size="2">2</font></sup> подписываем под делимым.
+<br>3.	Вычитаем члены результата из соответствующих членов делимого; сносим остальные члены делимого, получаем – 9<i>&#955;</i><sup><font size="2">2</font></sup> – 13<i>&#955;</i> + 22.
+<br>4.	Первый член остатка – 9<i>&#955;</i><sup><font size="2">2</font></sup> делим на первый член делителя, результат – 9<i>&#955;</i> есть второй член частного.
+<br>5.	Умножаем полученный второй член частного на делитель, результат – 9<i>&#955;</i><sup><font size="2">2</font></sup> + 9<i>&#955;</i> подписываем под первым остатком.
+<br>6.	Вычитаем члены этого результата из соответствующих членов первого остатка; сносим оставшийся член первого остатка; получаем второй остаток – 22<i>&#955;</i> + 22. 
+<br>7.	Первый член второго остатка – 22<i>&#955;</i> делим на первый член делимого; результат -22 есть третий член частного.
+<br>8.	Умножаем, полученный третий член частного на делитель, результат – 22<i>&#955;</i> + 22 подписываем под вторым остатком.
+<br>9.	Вычитаем члены этого результата из второго остатка, получаем нуль. Деление закончено.
+<br>Таким образом, разложив на множители левую часть уравнения (9.16), получили (<i>&#955;</i> – 1)<font size="4">(</font><i>&#955;</i><sup><font size="2">2</font></sup> – 9<i>&#955;</i> – 22<font size="4">)</font> = 0. Отсюда находим собственные значения линейного оператора 
+<br><i>&#955;</i><sub><font size="2">1</font></sub> = 1, <i>&#955;</i><sub><font size="2">2</font></sub> = – 2, <i>&#955;</i><sub><font size="2">3</font></sub> = 11.
+<br>Для нахождения соответствующих им собственных векторов необходимо решить однородные системы (9.5). 
+<br>При  <i>&#955;</i> = 1
+<br><img src="./Пример выполнения типового расчета 1.9_files/r1.9.42.JPG">
+<br>Записываем расширенную матрицу системы и ищем решение по методу Гаусса :
+<br><img src="./Пример выполнения типового расчета 1.9_files/r1.9.43.JPG" align="MIDDLE"><img src="./Пример выполнения типового расчета 1.9_files/r1.9.44.JPG" align="MIDDLE">.
+<br>Ранг матрицы коэффициентов равен 2, следовательно имеем одно свободное неизвестное, в качестве которого примем <i>x</i><sub><font size="2">3</font></sub>. 
+<br>Тогда решение запишется:
+<br><img src="./Пример выполнения типового расчета 1.9_files/r1.9.45.JPG" align="MIDDLE"> или <img src="./Пример выполнения типового расчета 1.9_files/r1.9.46.JPG" align="MIDDLE">. При <img src="./Пример выполнения типового расчета 1.9_files/r1.9.47.JPG" align="MIDDLE">.
+<br>Так как собственный вектор определяется с точностью до числового множителя, свободное неизвестное принимаем таким, чтобы координаты вектора были взаимно простыми целыми числами.
+<br>Аналогично находим собственный вектор <img src="./Пример выполнения типового расчета 1.9_files/r1.9.48.JPG" align="MIDDLE">, соответствующий собственному значению <i>&#955;</i><sub><font size="2">2</font></sub> = –2:
+<br><img src="./Пример выполнения типового расчета 1.9_files/r1.9.49.JPG" align="MIDDLE"> =&gt;
+<br><img src="./Пример выполнения типового расчета 1.9_files/r1.9.30.JPG" align="MIDDLE"><img src="./Пример выполнения типового расчета 1.9_files/r1.9.31.JPG" align="MIDDLE">.
+<br>Отсюда <i>x</i><sub><font size="2">3</font></sub> = 0. Следовательно, в качестве свободного неизвестного здесь нельзя брать <i>x</i><sub><font size="2">3</font></sub>, так как оно фиксировано. Выбираем в качестве свободного неизвестного <i>x</i><sub><font size="2">2</font></sub>, тогда решение запишется:
+<br><img src="./Пример выполнения типового расчета 1.9_files/r1.9.34.JPG" align="MIDDLE"> или <img src="./Пример выполнения типового расчета 1.9_files/r1.9.63.JPG" align="MIDDLE">. При <i>x</i><sub><font size="2">2</font></sub> = 1: <img src="./Пример выполнения типового расчета 1.9_files/r1.9.63.JPG" align="MIDDLE">.
+
+</p><p><b>Контроль расчетов:</b>
+<br> Убедимся в ортогональности собственных векторов <i>X</i><sub><font size="2">1</font></sub> и <i>X</i><sub><font size="2">2</font></sub> :
+<br><img src="./Пример выполнения типового расчета 1.9_files/r1.9.51.JPG" align="MIDDLE"> = 1 · (–1) + (–1) · 1 + 2 · 1 = 0.
+<br>Аналогично убеждаемся: <img src="./Пример выполнения типового расчета 1.9_files/r1.9.52.JPG" align="MIDDLE"> = 0; ­  ­  <img src="./Пример выполнения типового расчета 1.9_files/r1.9.53.JPG" align="MIDDLE"> = 0.
+<br>Система собственных векторов ортогональна.
+<br>Составим матрицу перехода <i>T</i>, столбцами которой являются найденные собственные векторы. Для окончательной проверки расчетов умножим матрицу <i>A</i> на <i>T</i> :
+<table><tbody><tr>
+<td align="CENTER" width="100%"><img src="./Пример выполнения типового расчета 1.9_files/r1.9.54.JPG" align="MIDDLE"></td>
+<td align="RIGHT" width="20%">(9.17)</td>
+</tr></tbody></table>	
+Каждый столбец полученной матрицы есть произведение матрицы <i>A</i> на соответствующий собственный вектор. Согласно определению собственного вектора это произведение должно быть равно произведению собственного числа на собственный вектор:
+<br><img src="./Пример выполнения типового расчета 1.9_files/r1.9.55.JPG" align="MIDDLE">; ­  ­  <img src="./Пример выполнения типового расчета 1.9_files/r1.9.56.JPG" align="MIDDLE">; ­  ­  <img src="./Пример выполнения типового расчета 1.9_files/r1.9.57.JPG" align="MIDDLE">.
+<br>Контроль подтвердил правильность расчетов. 
+<br>Составленная матрица <i>T</i> является матрицей перехода к базису из собственных векторов. Матрица <img src="./Пример выполнения типового расчета 1.9_files/r1.9.58.JPG" align="MIDDLE"> линейного оператора в базисе из собственных, векторов ищется по формуле (9.6). Найдем сначала матрицу <i>T</i><sup><font size="2"> –1</font></sup>, являющуюся обратной матрицей <i>T</i>.
+<br><img src="./Пример выполнения типового расчета 1.9_files/r1.9.59.JPG" align="MIDDLE">.
+<br>Контроль расчетов при нахождении обратной матрицы рекомендуем провести, перемножив матрицы   <i>T</i> и <i>T</i><sup><font size="2"> –1</font></sup>, так как, согласно определению, <i>T</i> · <i>T</i><sup><font size="2"> –1</font></sup> = <i>E</i> – единичная матрица.
+<br>Для нахождения <i>A</i> умножим <i>T</i> на матрицу <i>A · T</i>, найденную при контроле расчетов (9.17) :
+<br><img src="./Пример выполнения типового расчета 1.9_files/r1.9.60.JPG" align="MIDDLE"> <img src="./Пример выполнения типового расчета 1.9_files/r1.9.61.JPG" align="MIDDLE">.
+<br>Результат расчетов согласуется с формулой (9.8).
+<br><b>Часть 2.</b> Проведем исследование уравнения кривой второго порядка:
+<table><tbody><tr>
+<td align="CENTER" width="100%">3<i>x</i><sup><font size="2">2</font></sup> + 2<i>xy</i> + 3<i>y</i><sup><font size="2">2</font></sup> – 6<img src="./Пример выполнения типового расчета 1.9_files/r1.9.90a.JPG" align="MIDDLE"><i>x</i>– 2<img src="./Пример выполнения типового расчета 1.9_files/r1.9.90a.JPG" align="MIDDLE"><i>y</i> = –4</td>
+<td align="RIGHT" width="20%">(9.18)</td>
+</tr></tbody></table>	
+Для приведения уравнения к каноническому виду необходимо перейти к базису из нормированных собственных векторов <i>&#275;</i><sub><font size="2">1</font></sub>, <i>&#275;</i><sub><font size="2">2</font></sub> матрицы квадратной формы (9.11) :
+<br><img src="./Пример выполнения типового расчета 1.9_files/r1.9.64.JPG" align="MIDDLE">.
+<br>Находим собственные значения матрицы <i>A</i>, как корни характеристического уравнения (9.12) :
+<br><font size="4">|</font><i>A – &#955;E</i><font size="4">|</font> = <img src="./Пример выполнения типового расчета 1.9_files/r1.9.65.JPG" align="MIDDLE"> = 0.
+<br>Раскрывая определитель и приводя подобные члены, приходим к уравнению <i>&#955;</i><sup><font size="2">2</font></sup> – 6<i>&#955;</i> + 8 = 0, корни которого <i>&#955;</i><sub><font size="2">1</font></sub> = 4, ­ ­ <i>&#955;</i><sub><font size="2">2</font></sub> = 2.
+<br>Координаты собственных векторов находятся из решения однородных уравнений (9.13).
+<br>При <i>&#955;</i><sub><font size="2">1</font></sub> = 4 ­ ­  ­ ­ <img src="./Пример выполнения типового расчета 1.9_files/r1.9.66.JPG" align="MIDDLE">.
+<br>Откуда <i>c</i><sub><font size="2">11</font></sub> = <i>c</i><sub><font size="2">21</font></sub>, ­ ­ <i>c</i><sub><font size="2">21</font></sub> є <i>R</i>. Полагая <i>c</i><sub><font size="2">21</font></sub> = 1, получим <img src="./Пример выполнения типового расчета 1.9_files/r1.9.67.JPG" align="MIDDLE">.
+<br>Аналогично находим второй собственный вектор:
+<br><i>&#955;</i><sub><font size="2">2</font></sub> = 2  ­ ­  ­ ­ <img src="./Пример выполнения типового расчета 1.9_files/r1.9.68.JPG" align="MIDDLE">. 		 
+<br>Откуда <i>c</i><sub><font size="2">12</font></sub> = – <i>c</i><sub><font size="2">22</font></sub>, ­ <i>c</i><sub><font size="2">22</font></sub> є R. Полагая <i>c</i><sub><font size="2">22</font></sub> = 1, получим <img src="./Пример выполнения типового расчета 1.9_files/r1.9.69.JPG" align="MIDDLE">.
+<br>Убеждаемся, что найденные собственные векторы ортогональны между собой. Изобразим векторы   <img src="./Пример выполнения типового расчета 1.9_files/r1.9.70.JPG" align="MIDDLE"> и <img src="./Пример выполнения типового расчета 1.9_files/r1.9.71.JPG" align="MIDDLE"> на плоскости в базисе векторов <img src="./Пример выполнения типового расчета 1.9_files/r1.9.27.JPG" align="MIDDLE">, <img src="./Пример выполнения типового расчета 1.9_files/r1.9.28.JPG" align="MIDDLE"> (рис. 9.2).
+<br></p><center><img src="./Пример выполнения типового расчета 1.9_files/ris 1.9.2.JPG">
+<br>Рис. 9.2 Собственные векторы в системе координат <i>x, y</i></center>
+<br>Поворот от вектора <img src="./Пример выполнения типового расчета 1.9_files/r1.9.70.JPG" align="MIDDLE"> к вектору <img src="./Пример выполнения типового расчета 1.9_files/r1.9.71.JPG" align="MIDDLE"> совершается против часовой стрелки. Тем самым мы убеждаемся, что нумерация собственных векторов выбрана правильно, т.е. первый вектор <img src="./Пример выполнения типового расчета 1.9_files/r1.9.70.JPG" align="MIDDLE">,  второй – <img src="./Пример выполнения типового расчета 1.9_files/r1.9.71.JPG" align="MIDDLE">. В противном случае, т.е. если бы указанный поворот совершался по часовой стрелке, нумерацию собственных векторов следовало бы поменять. 
+<br>Для контроля расчетов составим матрицу <i>T</i>, столбцами которой являются найденные собственные векторы, и перемножим матрицы  <i>A</i> и <i>T</i>:
+<br><img src="./Пример выполнения типового расчета 1.9_files/r1.9.73.JPG" align="MIDDLE">.
+<br>Убеждаемся,
+<br><img src="./Пример выполнения типового расчета 1.9_files/r1.9.74.JPG" align="MIDDLE">,  
+<br>что подтверждает правильность расчетов.
+<br> Пронормируем найденные собственные векторы:
+<br><i>&#275;</i><sub><font size="2">1</font></sub> = <img src="./Пример выполнения типового расчета 1.9_files/r1.9.86.JPG" align="MIDDLE"><img src="./Пример выполнения типового расчета 1.9_files/r1.9.70.JPG" align="MIDDLE">, ­ ­  ­ ­<i>&#275;</i><sub><font size="2">2</font></sub> = <img src="./Пример выполнения типового расчета 1.9_files/r1.9.86.JPG" align="MIDDLE"><img src="./Пример выполнения типового расчета 1.9_files/r1.9.71.JPG" align="MIDDLE">. 
+<br>Получили новый базис (<i>&#275;</i><sub><font size="2">1</font></sub>, <i>&#275;</i><sub><font size="2">2</font></sub>), получающийся поворотом старого на угол &#960; / 4 против часовой стрелки. Старые координаты <i>x, y</i> в базисе <img src="./Пример выполнения типового расчета 1.9_files/r1.9.27.JPG" align="MIDDLE">,<img src="./Пример выполнения типового расчета 1.9_files/r1.9.28.JPG" align="MIDDLE"> и новые <i>x&#8242;</i>, <i>y&#8242;</i> в базисе <i>&#275;</i><sub><font size="2">1</font></sub>, <i>&#275;</i><sub><font size="2">2</font></sub> связаны соотношениями (9.14) :
+<table><tbody><tr>
+<td align="CENTER" width="100%"><img src="./Пример выполнения типового расчета 1.9_files/r1.9.78.JPG" align="MIDDLE"> ­ ­  ­ ­  ­ ­ или ­ ­  ­ ­ <img src="./Пример выполнения типового расчета 1.9_files/r1.9.79.JPG" align="MIDDLE"></td>
+<td align="RIGHT" width="20%">(9.19)</td>
+</tr></tbody></table>
+<br>Подставим (9.19) в уравнение кривой (6.10):
+<br><img src="./Пример выполнения типового расчета 1.9_files/r1.9.80.JPG" align="MIDDLE"> <img src="./Пример выполнения типового расчета 1.9_files/r1.9.87.JPG" align="MIDDLE">.
+<br>Раскрыв скобки и приведя подобные члены, получим:
+<br> 4<i>x&#8242;</i> <sup><font size="2">2</font></sup> + 2<i>y&#8242;</i> <sup><font size="2">2</font></sup> – 8<i>x&#8242;</i> + 4<i>y&#8242;</i> + 4 = 0,
+<br>что согласуется с формулой (9.15): коэффициентами при <i>x&#8242;</i> <sup><font size="2">2</font></sup> и <i>y&#8242;</i> <sup><font size="2">2</font></sup> стоят собственные числа 4 и 2. Сокращая на 2 и выделяя полные квадраты, получим 
+<br> 2(<i>x&#8242;</i> – 1)<sup><font size="2">2</font></sup> + (<i>y&#8242;</i> + 1)<sup><font size="2">2</font></sup> = 1 или <img src="./Пример выполнения типового расчета 1.9_files/r1.9.88.JPG" align="MIDDLE">.
+<br>Следовательно, уравнение (9.18) является уравнением эллипса с полуосями <img src="./Пример выполнения типового расчета 1.9_files/r1.9.86.JPG" align="MIDDLE"> и 1 и центром в точке (1,–1) новой системы координат.
+<br>Чтобы изобразить полученную кривую в исходной системе координат, удобно рассчитать координаты характерных точек кривой в этой системе координат. Для этого рисуем кривую в новой системе координат <i>X&#8242;O&#8242;Y&#8242;</i> (рис. 9.3). 
+
+<br><center><img src="./Пример выполнения типового расчета 1.9_files/ris 1.9.3.JPG">
+<br>Рис. 9.3 Полученная кривая в системе координат <i>x&#8242;, y&#8242;</i> </center>
+<br> Выписываем координаты характерных точек в системе <i>X&#8242;O&#8242;Y&#8242;</i>. В нашем случае это центр кривой <i>Q</i> и вершины эллипса <i>ABCD</i>. По формуле (9.19) находим координаты этих точек в исходной системе:
+
+<br><br>
+<table frame="border">
+<tbody><tr>
+<td align="CENTER"> ­ ­ Точка ­ ­ </td>
+<td align="CENTER"> ­ ­ Координаты (<i>x&#8242;, y&#8242;</i>) в системе <i>X&#8242; O&#8242; Y&#8242;</i> ­ ­ </td>
+<td align="CENTER"> ­ ­ Координаты (<i>x, y</i>) в системе <i>X O Y</i> ­ ­ </td>
+</tr>
+<tr>
+<td align="CENTER"> <i>Q</i> </td>
+<td align="CENTER">  (1; –1) </td>
+<td align="CENTER"> (<img src="./Пример выполнения типового расчета 1.9_files/r1.9.90.JPG" align="MIDDLE">; 0)</td>
+</tr>
+<tr>
+<td align="CENTER"> <i>A</i> </td>
+<td align="CENTER"> (1 + 1/<img src="./Пример выполнения типового расчета 1.9_files/r1.9.90.JPG" align="MIDDLE">; –1) </td>
+<td align="CENTER"> (<img src="./Пример выполнения типового расчета 1.9_files/r1.9.90.JPG" align="MIDDLE"> + 1/2; 1/2) </td>
+</tr>
+
+<tr>
+<td align="CENTER"> <i>B</i> </td>
+<td align="CENTER"> (1 –1/<img src="./Пример выполнения типового расчета 1.9_files/r1.9.90.JPG" align="MIDDLE">; –1) </td>
+<td align="CENTER"> (<img src="./Пример выполнения типового расчета 1.9_files/r1.9.90.JPG" align="MIDDLE"> –1/2; –1/2) </td>
+</tr>
+<tr>
+<td align="CENTER"> <i>C</i> </td>
+<td align="CENTER"> (1; 0) </td>
+<td align="CENTER"> (1/<img src="./Пример выполнения типового расчета 1.9_files/r1.9.90.JPG" align="MIDDLE">; –1/<img src="./Пример выполнения типового расчета 1.9_files/r1.9.90.JPG" align="MIDDLE">) </td>
+</tr>
+<tr>
+<td align="CENTER"> <i>D</i> </td>
+<td align="CENTER"> (1; –2) </td>
+<td align="CENTER"> (3/<img src="./Пример выполнения типового расчета 1.9_files/r1.9.90.JPG" align="MIDDLE">; –1/<img src="./Пример выполнения типового расчета 1.9_files/r1.9.90.JPG" align="MIDDLE">) </td>
+</tr>
+</tbody></table>
+<br>Наносим рассматриваемые точки в старой системе координат <i>XOY</i> после чего несложно нарисовать изучаемую кривую в этой системе координат (рис. 9.4).
+
+<br><center><img src="./Пример выполнения типового расчета 1.9_files/ris 1.9.4.JPG">
+<br>Рис. 9.4 Полученная кривая в исходной системе координат <i>x, y</i></center>
+
+<br><b><i>Замечание.</i></b> Если заданная в условии задачи кривая оказывается гиперболой, необходимо изобразить ее асимптоты. Для этого уравнение асимптот записывают в новой системе координат <i>x&#8242;</i>, <i>y&#8242;</i>, затем из формул (9.19) выражают новые координаты <i>x&#8242;</i>, <i>y&#8242;</i> через старые <i>x</i>, <i>y</i> и делают замену в уравнениях асимптот, записывая их тем самым в старой системе координат. После этого несложно нарисовать асимптоты на чертеже.
+
+<h3>9.5 Оформление отчета</h3>
+В отчете по первой задаче должно быть представлено характеристическое уравнение и его решение, решение однородных систем для нахождения собственных векторов. Полученные собственные векторы должны быть проверены на ортогональность, а также согласно определению собственного значения и собственного вектора. Далее должно быть показано преобразование матрицы <i>A</i> линейного оператора к базису из собственных векторов.
+<br>В ответе необходимо выписать собственные значения и соответствующие им собственные векторы:
+<br> <img src="./Пример выполнения типового расчета 1.9_files/r1.9.81.JPG" align="MIDDLE">.
+<br>По второй задаче должна быть представлена матрица квадратичной формы, нахождение ее собственных значений и собственных векторов. Собственные векторы необходимо проверить на ортогональность, а также согласно определению собственного значения и собственного вектора. Далее должно быть показано преобразование уравнения второго порядка при переходе к базису из ортонормированных собственных векторов и приведение его к каноническому виду. В работе должен быть сделан чертеж исходной системы координат, новой системы координат и построена кривая второго порядка.
+<br>В ответе по приведенному ниже образцу необходимо указать собственные значения и соответствующие им собственные векторы, формулы перехода от старых координат к новым, канонические уравнения кривой второго порядка, ее тип и основные числовые характеристики
+<br><i>&#955;</i><sub><font size="2">1</font></sub> = 4, <i>&#275;</i><sub><font size="2">1</font></sub> = <img src="./Пример выполнения типового расчета 1.9_files/r1.9.82.JPG" align="MIDDLE">; ­ ­ ­<i>&#955;</i><sub><font size="2">1</font></sub> = 2, <i>&#275;</i><sub><font size="2">2</font></sub> = <img src="./Пример выполнения типового расчета 1.9_files/r1.9.83.JPG" align="MIDDLE">; ­ ­ ­ <img src="./Пример выполнения типового расчета 1.9_files/r1.9.84.JPG" align="MIDDLE">.
+<br>В новых координатах <i>x&#8242;</i>, <i>y&#8242;</i> кривая задается уравнением <img src="./Пример выполнения типового расчета 1.9_files/r1.9.85.JPG" align="MIDDLE"> – каноническое уравнение эллипса с центром в точке (1;–1)  и полуосями <img src="./Пример выполнения типового расчета 1.9_files/r1.9.86.JPG" align="MIDDLE"> и 1.
+
+
+
+
+</body></html>
